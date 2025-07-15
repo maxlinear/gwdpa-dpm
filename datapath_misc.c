@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*****************************************************************************
- * Copyright (c) 2020 - 2022, MaxLinear, Inc.
+ * Copyright (c) 2020 - 2025, MaxLinear, Inc.
  * Copyright 2016 - 2020 Intel Corporation
  * Copyright 2015 - 2016 Lantiq Beteiligungs-GmbH & Co. KG
  * Copyright 2012 - 2014 Lantiq Deutschland GmbH
@@ -852,7 +852,7 @@ int32_t dp_update_subif(struct net_device *netif, void *data,
 
 int32_t dp_sync_subifid(struct net_device *dev, char *subif_name,
 			dp_subif_t *subif_id, struct dp_subif_data *data,
-			u32 flags, int *f_subif_up)
+			u32 flags)
 {
 	struct pmac_port_info *port;
 	int res = DP_FAILURE;
@@ -865,14 +865,13 @@ int32_t dp_sync_subifid(struct net_device *dev, char *subif_name,
 		res = dp_get_subifid_for_update(subif_id->inst, dev,
 						&subif_id[0], flags);
 		if (res)
-			*f_subif_up = 0;
-		else
-			*f_subif_up = 1;
+			pr_err("DPM: %s:dp_get_subifid_for_update dereg fail(%s)err:%d\n",
+			       __func__, data->ctp_dev->name, res);
 	} else {
 		res = dp_get_subifid_for_update(subif_id->inst, dev,
 						&subif_id[0], 0);
 		if (res) {
-			pr_err("DPM: %s:dp_get_subifid fail (%s)(err:%d)\n",
+			pr_err("DPM: %s:dp_get_subifid_for_update fail (%s)(err:%d)\n",
 			       __func__, dev->name ? dev->name : "NULL", res);
 			return res;
 		}
@@ -882,12 +881,11 @@ int32_t dp_sync_subifid(struct net_device *dev, char *subif_name,
 							data->ctp_dev,
 							&subif_id[1], 0);
 			if (res) {
-				pr_err("DPM: %s:get_subifid fail(%s)err:%d\n",
+				pr_err("DPM: %s:dp_get_subifid_for_update 1 fail(%s)err:%d\n",
 				       __func__, data->ctp_dev->name, res);
 				return res;
 			}
 		}
-		*f_subif_up = 1;
 	}
 	res = DP_SUCCESS;
 	return res;
@@ -896,7 +894,7 @@ int32_t dp_sync_subifid(struct net_device *dev, char *subif_name,
 int32_t dp_sync_subifid_priv(struct net_device *dev, char *subif_name,
 			     dp_subif_t *subif_id, struct dp_subif_data *data,
 			     u32 flags, dp_get_netif_subifid_fn_t subifid_fn,
-			     int *f_subif_up, int f_notif)
+			     int f_notif, bool no_notify)
 {
 	void *subif_data = NULL;
 	struct pmac_port_info *port;
@@ -918,7 +916,7 @@ int32_t dp_sync_subifid_priv(struct net_device *dev, char *subif_name,
 					 &subif_id[1], NULL, flags))
 				return DP_FAILURE;
 
-		if (*f_subif_up == 1) {
+		if (subif_id[0].subif_num) {
 			if (dp_update_subif(dev, subif_data, &subif_id[0],
 					    subif_name, flags, subifid_fn))
 				return DP_FAILURE;
@@ -928,7 +926,7 @@ int32_t dp_sync_subifid_priv(struct net_device *dev, char *subif_name,
 				return DP_FAILURE;
 		}
 	} else {
-		if (*f_subif_up == 1) {
+		if (subif_id[0].subif_num) {
 			dp_update_subif(dev, subif_data, &subif_id[0],
 					subif_name, flags, subifid_fn);
 
@@ -939,7 +937,7 @@ int32_t dp_sync_subifid_priv(struct net_device *dev, char *subif_name,
 				f_notif);
 			if ((get_dp_bp_info(subif_id->inst,
 					    subif_id->bport)->ref_cnt <= 1)
-					    && (f_notif))
+					    && (f_notif) && !no_notify)
 				dp_notifier_invoke(subif_id->inst, dev,
 						   subif_id->port_id,
 						   subif_id->subif, NULL,
@@ -947,10 +945,10 @@ int32_t dp_sync_subifid_priv(struct net_device *dev, char *subif_name,
 
 			if (data && data->ctp_dev) {
 				if (dp_update_subif(data->ctp_dev, subif_data,
-						    &subif_id[1], NULL, flags,
+						    &subif_id[1], data->ctp_dev->name, flags,
 						    subifid_fn))
 					return DP_FAILURE;
-				if (!f_notif)
+				if (!f_notif || no_notify)
 					goto exit;
 				dp_notifier_invoke(subif_id->inst, data->ctp_dev,
 						   subif_id->port_id,
@@ -1604,6 +1602,15 @@ char *dp_strsep(char **stringp, const char *delim)
 	*stringp = p;
 	return str;
 }
+
+#if IS_ENABLED(CONFIG_DPM_DATAPATH_DEBUGFS)
+void dp_dump_debugfs_qos_all(void)
+{
+	proc_qos_init(NULL);
+	DP_DUMP_DEBUGFS_QOS_ALL();
+}
+EXPORT_SYMBOL(dp_dump_debugfs_qos_all);
+#endif
 
 /* disable optimization in debug mode: pop */
 DP_NO_OPTIMIZE_POP

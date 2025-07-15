@@ -718,8 +718,8 @@ int dp_dec_dev(struct net_device *dev, int inst,
 		/* need update GSWIP bp members */
 		if (dp_dev->br_info) {
 			if (dp_dev->f_ctp_dev)
-				pr_err("DPM: why ctp_dev %s in br %s?\n", dev->name,
-				       dp_dev->br_info->dev->name);
+				pr_warn("DPM: warning ctp_dev %s in br %s?\n", dev->name,
+					dp_dev->br_info->dev->name);
 			DP_DUMP("Need workaround to dp_swdev_stp_disable: %s in br %s\n",
 				dp_dev->dev->name, dp_dev->br_info->dev->name);
 #if IS_ENABLED(CONFIG_DPM_DATAPATH_SWITCHDEV)

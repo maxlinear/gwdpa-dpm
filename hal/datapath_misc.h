@@ -364,11 +364,8 @@ static inline bool is_sch_parent_free(struct hal_priv *priv, int sch_id)
 
 static inline bool is_q_node_free(struct hal_priv *priv, int q_id)
 {
-	if (priv->qos_queue_stat[q_id].flag == PP_NODE_FREE) {
-		pr_err("DPM: Q Node is Free Qid %d flag:0x%x\n",
-		       q_id, priv->qos_queue_stat[q_id].flag);
+	if (priv->qos_queue_stat[q_id].flag == PP_NODE_FREE)
 		return true;
-	}
 	return false;
 }
 

@@ -6,6 +6,8 @@
 
 #include "datapath.h"
 #include "datapath_wa.h"
+#include "datapath_tx.h"
+#include "datapath_rx.h"
 
 /* When we try to debug dpm with gdb, quite a few code and variable are
  * optimized out which cause difficult to debug.

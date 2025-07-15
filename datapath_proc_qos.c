@@ -21,7 +21,7 @@
 #define PROC_MAX_BOX_LVL (DP_MAX_SCH_LVL + 1) /* Sched/Port both map to a box */
 /* max direct child per scheduler/port */
 #define PROC_DP_MAX_CHILD_PER_SCH_PORT DP_MAX_CHILD_PER_NODE
-#define PROC_MAX_Q_PER_PORT 32 /* max queues per port */
+#define PROC_MAX_Q_PER_PORT MAX_Q_PER_PORT /* max queues per port */
 /* max schedulers per port */
 #define PROC_DP_MAX_SCH_PER_PORT ((PROC_MAX_Q_PER_PORT) * (DP_MAX_SCH_LVL))
 #define PROC_DP_MAX_LEAF 8 /* max leaf per scheduler */
@@ -439,6 +439,8 @@ void virtual_print_box(struct box_info *box,
 	kfree(shaper);
 }
 
+#define DROP_MODE(x) \
+	x.codel ? "Codel" : x.drop == DP_QUEUE_DROP_WRED ? "Wred" : "Tail"
 void virtual_print_queues(struct q_print_info *q_info,
 			  char *buf, int rows, int cols)
 {
@@ -449,6 +451,7 @@ void virtual_print_queues(struct q_print_info *q_info,
 	const char *stat = NULL;
 	char *info = NULL;
 	struct dp_shaper_conf shaper = {0};
+	struct dp_queue_conf q_conf = {0};
 	char buf_cir[6] = {0};
 	char buf_pir[6] = {0};
 
@@ -485,6 +488,15 @@ void virtual_print_queues(struct q_print_info *q_info,
 		len = snprintf(p, Q_WIDTH - 1, "  stat:%s",
 			       stat ? stat : "");
 		p[len] = ' ';
+
+		q_conf.q_id = q_info->q_id[i];
+		if (!dp_queue_conf_get(&q_conf, 0)) {
+			p = &buf[cols * (box->child[idx].l.y2 + 2)];
+			len = snprintf(p, Q_WIDTH - 1, "  max=%d:%s",
+				       q_conf.wred_max_allowed,
+				       DROP_MODE(q_conf));
+			p[len] = ' ';
+		}
 
 		/* print leaf info in the parent box:sched/port */
 		p = &buf[cols * box->child[idx].l.y2];
@@ -1063,6 +1075,7 @@ exit:
 
 	return pos;
 }
+EXPORT_SYMBOL(proc_qos_dump);
 
 int proc_qos_init(void *param)
 {

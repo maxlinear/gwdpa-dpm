@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*****************************************************************************
- * Copyright (c) 2020 - 2024, MaxLinear, Inc.
+ * Copyright (c) 2020 - 2025, MaxLinear, Inc.
  * Copyright 2016 - 2020 Intel Corporation
  * Copyright 2015 - 2016 Lantiq Beteiligungs-GmbH & Co. KG
  * Copyright 2012 - 2014 Lantiq Deutschland GmbH
@@ -1356,7 +1356,7 @@ int dp_update_subif_info(struct dp_subif_upd_info *info)
 	struct dp_subif_info *sif = NULL;
 	struct dp_dev *dp_dev;
 	int vap, bp = 0, fid = 0, res = DP_FAILURE;
-	int f_new_subif = -1, f_old_subif = -1, f_rem_old_dev = 0;
+	int f_rem_old_dev = 0;
 	int f_rem_old_ctp_dev = 0, f_notif = 1;
 	struct net_device *old_dev = NULL, *old_ctp_dev = NULL;
 	struct bp_pmapper *bp_info = NULL;
@@ -1371,6 +1371,8 @@ int dp_update_subif_info(struct dp_subif_upd_info *info)
 		u32 old_cqm_deq_idx, old_bp, old_domain_member;
 		u8 old_domain_id;
 		u16 old_qid;
+		dp_subif_t dp_subif;
+		int old_subif_num, new_subif_num;
 	} *p = NULL;
 
 	if (unlikely(!dp_init_ok)) {
@@ -1409,13 +1411,20 @@ int dp_update_subif_info(struct dp_subif_upd_info *info)
 		pr_err("DPM: %s: why old_dev NULL\n", __func__);
 		goto exit;
 	}
-	DP_DEBUG(DP_DBG_FLAG_REG, "%s:%s%s %s%s %s=0x%x(%d)\n",
-			"update_subif",
-			"new_dev=", info->new_dev->name,
-			"new_ctp_dev=",
-			info->new_ctp_dev ? info->new_ctp_dev->name : "NULL",
-			"subif", info->subif, vap);
-	
+	if (sif->flags <= 0) {
+		pr_err("DPM: %s: wrong parameter since this subif not valid:dp_port=%d subif=%x new_dev=%s new_ctp=%s\n",
+		       __func__, info->dp_port, info->subif,
+		       info->new_dev ? info->new_dev->name : "",
+		       info->new_ctp_dev ? info->new_ctp_dev->name : "");
+	}
+	DP_DEBUG(DP_DBG_FLAG_REG, "\nDPM: %s before:\n  old_bp_info->ref_cnt=%d bp=%d port_id=%d, subif=%x, vap=%d\n  old_dev=%s old_ctp=%s \n  new_dev=%s new_ctp=%s\n",
+		 __func__,
+		 old_bp_info->ref_cnt, p->old_bp, info->dp_port, info->subif, vap,
+		 old_dev ? old_dev->name : "",
+		 old_ctp_dev ? old_ctp_dev->name : "",
+		 info->new_dev ? info->new_dev->name : "",
+		 info->new_ctp_dev ? info->new_ctp_dev->name : "");
+
 	DP_LIB_LOCK(&dp_lock);
 #ifdef DP_NOT_USE_NETDEV_REGISTER
 	dp_dev = dp_dev_lookup(info->new_dev);
@@ -1444,6 +1453,23 @@ ctp_dev_workaround:
 	if (!dp_update_subif_info_check_ok(old_dev, old_ctp_dev, info))
 		goto exit_lock;
 #endif
+	if (!dp_get_netif_subifid(old_dev, NULL, NULL, NULL, &p->dp_subif, 0))
+		p->old_subif_num = p->dp_subif.subif_num;
+	if (!dp_get_netif_subifid(info->new_dev, NULL, NULL, NULL, &p->dp_subif, 0))
+		p->new_subif_num = p->dp_subif.subif_num;
+	if (old_ctp_dev != info->new_ctp_dev)
+		dp_notifier_invoke(info->inst,
+				   old_ctp_dev ? old_ctp_dev : info->new_ctp_dev,
+				   info->dp_port,
+				   info->subif, NULL,
+				   DP_EVENT_DE_REGISTER_SUBIF);
+	/* convert last pmapper subif to gemport device: for recovery */
+	if ((old_dev != info->new_dev) &&
+	    !info->new_ctp_dev && (p->old_subif_num == 1))
+		dp_notifier_invoke(info->inst, old_dev, info->dp_port,
+				   info->subif, NULL,
+				   DP_EVENT_DE_REGISTER_SUBIF);
+
 	/* note: must do dp_dec_dev before dp_inc_dev */
 	if (old_ctp_dev &&
 	    ((old_ctp_dev != info->new_ctp_dev) ||
@@ -1562,19 +1588,12 @@ ctp_dev_workaround:
 
 	/* remove old dev */
 	if (old_bp_info && f_rem_old_dev) {
+		/* note: if old_bp_info->ref_cnt is zero, it means old_dev is
+		 * a non-pmapper device and no ctp_dev under this device
+		 */
 		if (old_bp_info->ref_cnt > 0)
 			old_bp_info->ref_cnt--;
-		else
-			pr_err("DPM: %s:why old_bp_info->ref_cnt zero:%s ?\n",
-					__func__, old_dev->name);
-
-		DP_DEBUG(DP_DBG_FLAG_REG,
-			 "del old master dev(%s) from dp_dev list\n",
-			 old_dev->name);
-		dp_notifier_invoke(info->inst, old_dev, info->dp_port,
-				   info->subif, NULL,
-				   DP_EVENT_DE_REGISTER_SUBIF);
-
+		
 		/* free bp if necessary */
 		if (!old_bp_info->ref_cnt) {
 			/* reset domain information while freeing bridge port */
@@ -1599,7 +1618,7 @@ ctp_dev_workaround:
 	old_subif_id_sync->port_id = info->dp_port;
 	old_subif_id_sync->inst = info->inst;
 	res = dp_sync_subifid(old_dev, NULL, old_subif_id_sync, &p->old_data,
-			DP_F_DEREGISTER, &f_old_subif);
+			DP_F_DEREGISTER);
 	/* no need any DQ port modification if prev & new tcont are same */
 	p->old_cqm_deq_idx = sif->cqm_port_idx;
 	p->old_bp = sif->bp;
@@ -1639,8 +1658,7 @@ ctp_dev_workaround:
 	}
 	new_subif_id_sync->port_id = info->dp_port;
 	new_subif_id_sync->inst = info->inst;
-	res = dp_sync_subifid(sif->netif, NULL, new_subif_id_sync, &p->new_data, 0,
-			&f_new_subif);
+	res = dp_sync_subifid(sif->netif, NULL, new_subif_id_sync, &p->new_data, 0);
 	if (res)
 		goto exit_lock;
 	
@@ -1665,22 +1683,36 @@ ctp_dev_workaround:
 
 	/* remove old rcu info based on collected subif info */
 	res = dp_sync_subifid_priv(old_dev, NULL, old_subif_id_sync, &p->old_data,
-			DP_F_DEREGISTER, subifid_fn, &f_old_subif,
-			f_notif);
+			DP_F_DEREGISTER, subifid_fn, f_notif, true);
 	if (res) {
 		pr_err("DPM: remove old dev from rcu fail(%s)\n",
 			old_dev->name ? old_dev->name : "NULL");
 		goto exit;
 	}
 	/* update rcu info based on new subif info */
-	res = dp_sync_subifid_priv(info->new_dev, NULL, new_subif_id_sync,
-			&p->new_data, 0, subifid_fn, &f_new_subif,
-			f_notif);
+	res = dp_sync_subifid_priv(info->new_dev, info->new_dev->name, new_subif_id_sync,
+			&p->new_data, 0, subifid_fn, f_notif, true);
 	if (res) {
 		pr_err("DPM: update new dev into rcu fail(%s)\n",
 		       info->new_dev->name ? info->new_dev->name : "NULL");
 		goto exit;
 	}
+
+	/* convert 1st gemport dev to pmapper*/
+	if ((old_dev != info->new_dev) &&
+	    info->new_ctp_dev && (p->new_subif_num == 0))
+		dp_notifier_invoke(info->inst,
+				   info->new_dev,
+				   info->dp_port,
+				   info->subif, NULL,
+				   DP_EVENT_REGISTER_SUBIF);
+	if (old_ctp_dev != info->new_ctp_dev)
+		dp_notifier_invoke(info->inst,
+				   old_ctp_dev ? old_ctp_dev : info->new_ctp_dev,
+				   info->dp_port,
+				   info->subif, NULL,
+				   DP_EVENT_REGISTER_SUBIF);
+
 	trace_dp_update_subif_info(DP_SUCCESS, info, old_dev, old_ctp_dev,
 			p->old_cqm_deq_idx, p->old_qid,
 			p->old_domain_id, p->old_domain_member,
@@ -1691,6 +1723,13 @@ ctp_dev_workaround:
 exit_lock:
 	DP_LIB_UNLOCK(&dp_lock);
 exit:
+	DP_DEBUG(DP_DBG_FLAG_REG, "DPM: %s after: \n  old_bp_info->ref_cnt=%d old_bp=%d with f_rem_old_dev=%d dp_port=%d, subif=%x \n",
+		 __func__, old_bp_info->ref_cnt, p->old_bp, f_rem_old_dev,
+		info->dp_port, info->subif);
+	if (bp_info)
+		DP_DEBUG(DP_DBG_FLAG_REG, "  new_bp_info->ref_cnt=%d new_bp=%d \n",
+			 bp_info->ref_cnt, bp);
+			
 	if (unlikely(res)) {
 		dp_print_err_info(res);
 		res = DP_FAILURE;
@@ -2481,7 +2520,7 @@ int32_t dp_register_subif_ext2(int inst, struct module *owner,
 		struct dp_subif_data *data, u32 flags)
 {
 	int res = DP_FAILURE;
-	int n, port_id, f_subif = -1, old_subif = -1;
+	int n, port_id, old_subif = -1;
 	struct pmac_port_info *port_info;
 	struct dp_subif_data tmp_data = {0};
 	dp_subif_t *subif_id_sync = NULL;
@@ -2585,13 +2624,12 @@ int32_t dp_register_subif_ext2(int inst, struct module *owner,
 				port_info->vap_mask);
 		subifid_fn = get_dp_port_subif(port_info, n)->get_subifid_fn;
 	}
-	memset(subif_id_sync, 0, sizeof(*subif_id_sync));
+	dp_memset(subif_id_sync, 0, sizeof(*subif_id_sync));
 	subif_id_sync->port_id = port_id;
 	subif_id_sync->inst = inst;
 	subif_id_sync->domain_id = subif_id->domain_id;
 	subif_id_sync->domain_members = subif_id->domain_members;
-	res = dp_sync_subifid(dev, subif_name, subif_id_sync, data, flags,
-			&f_subif);
+	res = dp_sync_subifid(dev, subif_name, subif_id_sync, data, flags);
 	if (res) {
 		DP_LIB_UNLOCK(&dp_lock);
 		goto EXIT;
@@ -2599,7 +2637,7 @@ int32_t dp_register_subif_ext2(int inst, struct module *owner,
 	DP_LIB_UNLOCK(&dp_lock);
 	if (!res)
 		res = dp_sync_subifid_priv(dev, subif_name, subif_id_sync, data,
-				flags, subifid_fn, &f_subif, 1);
+				flags, subifid_fn, 1, false);
 EXIT:
 	kfree(subif_id_sync);
 	if (unlikely(res)) {
@@ -2863,8 +2901,6 @@ int32_t dp_get_subifid_for_update(int inst, struct net_device *netif,
 	}
 
 	p_info = get_dp_port_info(inst, port_id);
-	if (p_info->status != PORT_SUBIF_REGISTERED)
-		goto EXIT;
 
 	/* For DSL ATM case netif will be NULL with valid port id */
 	if ((!netif) && (!is_dsl(p_info))) {

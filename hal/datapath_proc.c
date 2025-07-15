@@ -422,6 +422,7 @@ EXIT:
 		pos = -1; /*end of the loop */
 	return pos;
 }
+EXPORT_SYMBOL(proc_sched_child_hal_dump);
 
 int proc_sched_hal_dump(struct seq_file *s, int pos)
 {
@@ -463,6 +464,7 @@ EXIT:
 		pos = -1; /*end of the loop */
 	return pos;
 }
+EXPORT_SYMBOL(proc_sched_hal_dump);
 
 int proc_node_hal_dump(struct seq_file *s, int pos)
 {
@@ -482,8 +484,16 @@ int proc_node_hal_dump(struct seq_file *s, int pos)
 		dp_sprintf(s, "%9s %8s %12s %12s %8s %8s %8s\n",
 			   "node_id", "type", "c_flag", "p_flag",
 			   "parent_type", "parent_node", "child");
-	if (!m->used)
+	if (!m->used) {
+		if(m->node.type || m->c_flag || m->p_flag || m->child_num) {
+			/* maybe wrong */
+			dp_sprintf(s, "%d type=%d c_flag=%d p_flag=%d child_num=%d\n", 
+				   pos, (int)m->node.type,
+				   (int)m->c_flag, (int)m->p_flag, m->child_num);
+		}
 		goto EXIT;
+	}
+
 	if (Q_NODE(m->node.type)) {
 		q = &priv->qos_queue_stat[m->node.id.q_id];
 		dp_sprintf(s,  "%4d/%4d %8s %12s %12s %8s %8d %8s\n",
@@ -536,6 +546,55 @@ EXIT:
 		pos = -1; /*end of the loop */
 	return pos;
 }
+EXPORT_SYMBOL(proc_node_hal_dump);
+
+ssize_t proc_node_hal_write(struct file *file, const char *buf,
+			  size_t count, loff_t *ppos)
+{
+	int node_id = 0;
+	char *str;
+	struct hal_priv *priv = HAL(0);
+	struct pp_sch_stat *m;
+
+	if (!capable(CAP_NET_ADMIN))
+		return count;
+	if (!dp_init_ok) {
+		pr_err("DPM: dp not initialize yet\n");
+		return count;
+	}
+
+	str = dp_kzalloc(count + 1, GFP_ATOMIC);
+	if (!str)
+		return count;
+	if (dp_copy_from_user(str, buf, count))
+		goto EXIT;
+	node_id = dp_atoi(str);
+	if ((node_id < 0) || (node_id >= ARRAY_SIZE(priv->qos_sch_stat))) {
+		pr_err("wrong node_id=%d\n", node_id);
+		goto EXIT;
+	}
+	m = &priv->qos_sch_stat[node_id];
+
+	dp_sprintf(NULL, "%9s %4s %8s %12s %12s %8s %8s %8s\n",
+		   "phy/node", "used", "type", "c_flag", "p_flag",
+		   "parent_type", "parent_node", "child");
+
+	dp_sprintf(NULL,  "%4d/%4d %4d %8s %12s %12s %8s %8d %8d\n",
+			   m->node.id.q_id,
+			   node_id,
+			   m->used,
+			   node_type_str(m->node.type),
+			   node_stat_str(m->c_flag),
+			   node_stat_str(m->p_flag),
+			   node_type_str(m->parent.type),
+			   m->parent.node_id,
+			   m->child_num);
+EXIT:
+	kfree(str);
+
+	return count;
+}
+
 
 int proc_queue_hal_dump(struct seq_file *s, int pos)
 {
@@ -580,7 +639,7 @@ static struct dp_proc_entry dp_proc_entries[] = {
 	{PROC_SCHED, NULL, proc_sched_hal_dump, NULL, NULL},
 	{PROC_SCHED_CHILD, NULL, proc_sched_child_hal_dump, NULL, NULL},
 	{PROC_QUEUE, NULL, proc_queue_hal_dump, NULL, NULL},
-	{PROC_NODE, NULL, proc_node_hal_dump, NULL, NULL},
+	{PROC_NODE, NULL, proc_node_hal_dump, NULL, proc_node_hal_write},
 	{PROC_MIB_COUNT, NULL, proc_mib_count_dump, proc_mib_count_init, proc_mib_count_write},
 	/* last place holder */
 	{NULL, NULL, NULL, NULL, NULL}

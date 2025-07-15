@@ -146,9 +146,12 @@ int dp_register_switchdev_ops(struct net_device *dev, int reset)
 			return DP_FAILURE;
 		}
 	} else {
-		if (dp_ndo_get_phys_port_id != dev->netdev_ops->ndo_get_phys_port_id) {
-			pr_err("why device %s's ndo_get_phys_port_id has not set to dp_ndo_get_phys_port_id yet\n",
-			       dev->name);
+		if (!dp_dev->f_ctp_dev &&
+		    dp_ndo_get_phys_port_id != dev->netdev_ops->ndo_get_phys_port_id) {
+			pr_err("why device %s's ndo_get_phys_port_id(%px) has not set to dp_ndo_get_phys_port_id(%px) yet\n",
+			       dev->name,
+			       dev->netdev_ops->ndo_get_phys_port_id,
+			       dp_ndo_get_phys_port_id);
 			return DP_FAILURE;
 		}
 	}

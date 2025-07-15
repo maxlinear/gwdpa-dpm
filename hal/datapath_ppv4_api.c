@@ -547,8 +547,8 @@ static int node_queue_dec(int inst, int node_id, int flag)
 	sch_stat->parent.type = 0;
 	sch_stat->parent.flag = 0;
 	sch_stat->parent.node_id = 0;
-	sch_stat->p_flag |= PP_NODE_ALLOC;
-	q_stat->flag |= PP_NODE_ALLOC;
+	sch_stat->p_flag &= ~PP_NODE_ACTIVE;
+	q_stat->flag &= ~PP_NODE_ACTIVE;
 
 	return DP_SUCCESS;
 }
@@ -627,12 +627,6 @@ static int node_queue_rst(int inst, int node_id, int flag)
 	DP_DEBUG(DP_DBG_FLAG_QOS, "dp_port=%d Q:[%d/%d] resv_idx:%d\n",
 		 dp_port, qid, node_id, resv_idx);
 
-	if (!PP_ALLOC(q_stat->flag)) {
-		pr_err("DPM: %s wrong Q[%d/%d] stat:expect ALLOC\n",
-		       __func__, qid, node_id);
-		return DP_FAILURE;
-	}
-
 	if (PP_RESV(q_stat->flag))
 		priv->resv[dp_port].resv_q[resv_idx].flag = PP_NODE_FREE;
 
@@ -673,7 +667,7 @@ static int node_sched_dec(int inst, int node_id, int flag)
 			 sch_stat->child_num, sch_stat->child_num - 1);
 		sch_stat->child_num--;
 		if (!sch_stat->child_num)
-			sch_stat->c_flag |= PP_NODE_ALLOC;
+			sch_stat->c_flag &= ~PP_NODE_ACTIVE;
 	} else if (flag & P_FLAG) {
 		if (!PP_ACT(sch_stat->p_flag)) {
 			pr_err("DPM: %s wrong Sch:%d stat(%d):expect ACTIVE\n",
@@ -712,7 +706,7 @@ static int node_sched_dec(int inst, int node_id, int flag)
 		sch_stat->parent.type = 0;
 		sch_stat->parent.flag = 0;
 		sch_stat->parent.node_id = 0;
-		sch_stat->p_flag |= PP_NODE_ALLOC;
+		sch_stat->p_flag &= ~PP_NODE_ACTIVE;
 	} else {
 		return DP_FAILURE;
 	}
@@ -808,14 +802,6 @@ static int node_sched_rst(int inst, int node_id, int flag)
 
 	DP_DEBUG(DP_DBG_FLAG_QOS, "dp_port=%d Sch:%d resv_idx:%d\n",
 		 dp_port, node_id, resv_idx);
-
-	if (!PP_ALLOC(sch_stat->c_flag) || !PP_ALLOC(sch_stat->p_flag) ||
-	    sch_stat->child_num) {
-		pr_err("DPM: %s wrong Sch:%d c_flag/p_flag/child_num(%d):%s\n",
-		       __func__, node_id, sch_stat->child_num,
-		       "expect c_flag or p_flag ALLOC or Non-zero child_num");
-		return DP_FAILURE;
-	}
 
 	if (PP_RESV(sch_stat->p_flag))
 		priv->resv[dp_port].resv_sched[resv_idx].flag = PP_NODE_FREE;
@@ -1460,8 +1446,9 @@ int _dp_node_free(struct dp_node_alloc *node, int flag)
 	if (Q_NODE(node->type)) {
 		phy_id = node->id.q_id;
 		if (is_q_node_free(priv, phy_id)) {
-			pr_err("DPM: q[%d] already freed and cannot free again\n",
-			       phy_id);
+			DP_DEBUG(DP_DBG_FLAG_QOS, "DPM: q[%d] already freed and cannot free again\n",
+				 phy_id);
+			res = DP_SUCCESS;
 			goto exit;
 		}
 
@@ -1480,7 +1467,7 @@ int _dp_node_free(struct dp_node_alloc *node, int flag)
 			goto exit;
 		}
 
-		if (!PP_RESV(q_stat->flag)) {
+		if (PP_ALLOC(q_stat->flag) && !PP_RESV(q_stat->flag)) {
 			if (dp_qos_queue_remove(priv->qdev, node_id)) {
 				pr_err("DPM: %s dp_qos_queue_remove Q:%d fail\n",
 				       __func__, node_id);
@@ -1488,23 +1475,21 @@ int _dp_node_free(struct dp_node_alloc *node, int flag)
 			}
 		}
 
-		if (!PP_ACT(q_stat->flag)) {
-			kfree(l);
-			return DP_SUCCESS;
+		if (PP_ACT(sch_stat->p_flag)) {
+			/* update current sch_stat */
+			if (node_stat_update(node->inst, node_id, f)) {
+				pr_err("DPM: %s node_stat_update rm Q:%d fail\n",
+				       __func__, node_id);
+				goto exit;
+			}
+			/* update parernt sch_stat */
+			if (node_stat_update(node->inst, pid, f | C_FLAG)) {
+				pr_err("DPM: %s node_stat_update parent:%d fail\n",
+				       __func__, pid);
+				goto exit;
+			}
 		}
-
-		if (node_stat_update(node->inst, node_id, f)) {
-			pr_err("DPM: %s node_stat_update rm Q:%d fail\n",
-			       __func__, node_id);
-			goto exit;
-		}
-
-		if (node_stat_update(node->inst, pid, f | C_FLAG)) {
-			pr_err("DPM: %s node_stat_update parent:%d fail\n",
-			       __func__, pid);
-			goto exit;
-		}
-
+		/* reset this node */
 		if (node_stat_update(node->inst, node_id, DP_NODE_RST)) {
 			pr_err("DPM: %s node_stat_update rst Q:%d fail\n",
 			       __func__, node_id);
@@ -1534,47 +1519,43 @@ int _dp_node_free(struct dp_node_alloc *node, int flag)
 		}
 		res = DP_SUCCESS;
 	} else if (S_NODE(node->type)) {
-
 		node_id = node->id.sch_id;
 		sch_stat = &priv->qos_sch_stat[node_id];
 
-		if (sch_stat->child_num) {
-			pr_err("DPM: %s Sch:%d still have child %d\n",
-			       __func__, node_id, sch_stat->child_num);
+		if (sch_stat->child_num || PP_ACT(sch_stat->c_flag)) {
+			pr_err("DPM: %s Sch_id=%d still have child_num=%d and c_flag=%d\n",
+			       __func__, node_id, sch_stat->child_num,
+			       sch_stat->c_flag);
 			goto exit;
 		}
-
-		if (is_sch_parent_free(priv, node_id))
+		if (PP_FREE(sch_stat->p_flag)) {
+			/* already free and nothing to do */
+			res = DP_SUCCESS;
 			goto exit;
-
+		}
+		/* get parernt id */
 		pid = priv->qos_sch_stat[node_id].parent.node_id;
-
 		if (!PP_RESV(sch_stat->p_flag)) {
+			/* free the sched if it is not from reserved pool */
 			if (dp_qos_sched_remove(priv->qdev, node_id)) {
 				pr_err("DPM: %s dp_qos_sched_remove\n", __func__);
 				goto exit;
 			}
 		}
-
-		if (!PP_ACT(sch_stat->p_flag) && !PP_ACT(sch_stat->c_flag)) {
-			kfree(l);
-			return DP_SUCCESS;
+		if (PP_ACT(sch_stat->p_flag)) {
+			/* update current sched status */
+			if (node_stat_update(node->inst, node_id, f | P_FLAG)) {
+				pr_err("DPM: %s node_stat_update rm Sch:%d fail\n",
+				       __func__, node_id);
+				goto exit;
+			}
+			/* update parernt node's status */
+			if (node_stat_update(node->inst, pid, f | C_FLAG)) {
+				pr_err("DPM: %s node_stat_update rm parent:%d fail\n",
+				       __func__, pid);
+				goto exit;
+			}
 		}
-
-		if (PP_ACT(sch_stat->p_flag) &&
-		    node_stat_update(node->inst, node_id, f | P_FLAG)) {
-			pr_err("DPM: %s node_stat_update rm Sch:%d fail\n",
-			       __func__, node_id);
-			goto exit;
-		}
-
-		if (PP_ACT(sch_stat->c_flag) &&
-		    node_stat_update(node->inst, pid, f | C_FLAG)) {
-			pr_err("DPM: %s node_stat_update rm parent:%d fail\n",
-			       __func__, pid);
-			goto exit;
-		}
-
 		f = DP_NODE_RST;
 		if (node_stat_update(node->inst, node_id, f | P_FLAG)) {
 			pr_err("DPM: %s node_stat_update rst Sch:/%d fail\n",
@@ -1765,7 +1746,8 @@ static int get_parent_arbi(int inst, int node_id, int flag)
 
 	sch_stat = &priv->qos_sch_stat[node_id];
 	if (PP_FREE(sch_stat->parent.flag)) {
-		pr_err("DPM: %s parent not set for node\n", __func__);
+		pr_err("DPM: %s parent not set for node id=%d\n", __func__,
+		       node_id);
 		return DP_FAILURE;
 	}
 
@@ -2205,7 +2187,7 @@ static int dp_node_link_parent_set(
 	priv->qos_sch_stat[node_id].parent.type = info->p_node_type;
 
 	/* Increase child_num in parent's global table and status */
-	node_stat_update(info->inst, node_id, f);
+	node_stat_update(info->inst, node_id, DP_NODE_INC | P_FLAG);
 	node_stat_update(info->inst, pid, DP_NODE_INC | C_FLAG);
 
 	dp_map_qid_to_cqmdeq(info, flag);
@@ -2655,6 +2637,7 @@ int _dp_node_link_add(struct dp_node_link *info, int flag)
 	struct local *l;
 	struct pmac_port_info *ppi = NULL;
 	struct cqm_port_info *cpi = NULL;
+	int new_child_num;
 
 	dump_qos_node_link(info);
 
@@ -2735,8 +2718,11 @@ int _dp_node_link_add(struct dp_node_link *info, int flag)
 		}
 	}
 
-	if (priv->qos_sch_stat[pid].child_num >= DP_MAX_CHILD_PER_NODE) {
-		pr_err("DPM: %s node:%d child num:%d over limit\n", __func__,
+	new_child_num = priv->qos_sch_stat[pid].child_num;
+	if (info->node_id.q_id == DP_NODE_AUTO_ID)
+		new_child_num++;
+	if (new_child_num > DP_MAX_CHILD_PER_NODE) {
+		pr_err("DPM: %s node:%d child num: node %d over limit\n", __func__,
 		       priv->qos_sch_stat[pid].child_num, pid);
 		goto err;
 	}
@@ -2772,7 +2758,8 @@ int _dp_node_link_add(struct dp_node_link *info, int flag)
 		 *       instead of depends on PP QOS status for performance
 		 *       reason
 		 */
-		if (!dp_qos_queue_conf_get(priv->qdev, node_id, &l->q_cfg)) {
+		if (!dp_qos_queue_conf_get(priv->qdev, node_id, &l->q_cfg) &&
+		    (priv->qos_sch_stat[node_id].p_flag & PP_NODE_ACTIVE)) {
 			/* Q already linked to a parent */
 			if (!l->q_cfg.blocked)
 				l->q_block[0] = l->q_cfg.blocked;
@@ -2857,7 +2844,8 @@ int _dp_node_link_add(struct dp_node_link *info, int flag)
 
 		if (!free_child &&
 		    !dp_qos_sched_conf_get(priv->qdev, node_id,
-					   &l->sch_cfg)) {
+					   &l->sch_cfg) &&
+		    (priv->qos_sch_stat[node_id].p_flag & PP_NODE_ACTIVE)) {
 			/* already linked, ie, in active status.
 			 * If current parent and new parent same. Do nothing.
 			 */
@@ -3090,7 +3078,6 @@ int _dp_queue_conf_get(struct dp_queue_conf *cfg, int flag)
 		cfg->min_size[2] = 0;
 		cfg->max_size[2] = 0;
 		cfg->wred_slope[2] = 0;
-		cfg->wred_max_allowed = q_cfg->wred_max_allowed;
 		cfg->wred_min_guaranteed = q_cfg->wred_min_guaranteed;
 	} else {
 		cfg->drop = DP_QUEUE_DROP_TAIL;
@@ -3099,6 +3086,7 @@ int _dp_queue_conf_get(struct dp_queue_conf *cfg, int flag)
 		cfg->min_size[1] = q_cfg->wred_min_avg_yellow;
 		cfg->max_size[1] = q_cfg->wred_max_avg_yellow;
 	}
+	cfg->wred_max_allowed = q_cfg->wred_max_allowed;
 
 	res = DP_SUCCESS;
 

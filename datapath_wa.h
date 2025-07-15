@@ -11,6 +11,8 @@
 #include "datapath_tx.h"
 
 #if IS_ENABLED(CONFIG_DPM_DATAPATH_DISABLE_OPTIMIZE)
+struct dp_tx_context;
+struct dp_rx_context;
 void dp_rcu_tx_update(struct dp_tx_context *ctx, void *new);
 void dp_rcu_rx_update(struct dp_rx_context *ctx, void *new);
 

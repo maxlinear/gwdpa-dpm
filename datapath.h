@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*****************************************************************************
- * Copyright (c) 2020 - 2024, MaxLinear, Inc.
+ * Copyright (c) 2020 - 2025, MaxLinear, Inc.
  * Copyright 2016 - 2020 Intel Corporation
  * Copyright 2015 - 2016 Lantiq Beteiligungs-GmbH & Co. KG
  * Copyright 2012 - 2014 Lantiq Deutschland GmbH
@@ -125,6 +125,8 @@ struct dp_gswip {
 #endif
 #define DP_MAX_CQM_DEQ DP_MAX_PPV4_PORT
 #define DP_MAX_NODES 2048 /* Maximum PPV4 nodes */
+
+#define MAX_Q_PER_PORT          65 /* Maximum queue per port */
 
 /* CPU path CTP usage */
 #if IS_ENABLED(CONFIG_PRX300_CQM)
@@ -951,7 +953,9 @@ struct bp_pmapper {
 	int dscp[DP_PMAP_DSCP_NUM]; /*DSCP table*/
 	int def_ctp; /*Untag & nonip*/
 	int mode; /*mode*/
-	int ref_cnt; /*reference counter */
+	int ref_cnt; /* reference counter of ctp_dev under this device:
+		      * zero means currently it is non-pmapper device
+		      */
 	int ctp_flow_index; /* to store CTP first flow entry index
 			     * for vlan aware feature PCE rule
 			     */
@@ -1383,6 +1387,8 @@ int dp_cpufreq_notify_exit(void);
 #endif
 int proc_qos_init(void *param);
 int proc_qos_dump(struct seq_file *s, int pos);
+int proc_sched_hal_dump(struct seq_file *s, int pos);
+int proc_sched_child_hal_dump(struct seq_file *s, int pos);
 ssize_t proc_qos_write(struct file *file, const char *buf,
 		       size_t count, loff_t *ppos);
 void dump_parser_flag(char *buf);
@@ -1466,11 +1472,11 @@ int dp_get_drv_mib(dp_subif_t *subif, dp_drv_mib_t *mib, uint32_t flag);
 extern struct hlist_head dp_subif_list[DP_SUBIF_LIST_HASH_SIZE];
 int32_t dp_sync_subifid(struct net_device *dev, char *subif_name,
 			dp_subif_t *subif_id, struct dp_subif_data *data,
-			u32 flags, int *f_subif_up);
+			u32 flags);
 int32_t dp_sync_subifid_priv(struct net_device *dev, char *subif_name,
 			     dp_subif_t *subif_id, struct dp_subif_data *data,
 			     u32 flags, dp_get_netif_subifid_fn_t subifid_fn,
-			     int *f_subif_up, int f_notif);
+			     int f_notif, bool no_notify);
 int32_t	dp_update_subif(struct net_device *netif, void *data, dp_subif_t *subif,
 			char *subif_name, u32 flags,
 			dp_get_netif_subifid_fn_t subifid_fn);
@@ -1578,8 +1584,15 @@ void dp_set_tmp_inst(int);
 		proc_dp_active_rx_hook_dump(NULL); \
 	} \
 } while (0)
+
+#define DP_DUMP_DEBUGFS_QOS_ALL(...) do {\
+	dp_dump_debugfs(proc_qos_dump); \
+	dp_dump_debugfs(proc_sched_hal_dump); \
+	dp_dump_debugfs(proc_sched_child_hal_dump); \
+} while (0)
 #else
 #define dp_dump_debugfs_all(...)
+#define DP_DUMP_DEBUGFS_QOS_ALL(...)
 #endif
 
 static inline bool is_directpath(struct pmac_port_info *port)

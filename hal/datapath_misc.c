@@ -2290,6 +2290,85 @@ int free_q(int inst, int dp_port, int qid, struct cqm_port_info *deq_pinfo,
 	return DP_SUCCESS;
 }
 
+static int dp_tune_queue_setting(int inst, struct ppv4_q_sch_port *q_port,
+				 int flag)
+{
+	__maybe_unused struct dp_queue_conf q_conf = {0};
+	__maybe_unused struct dp_shaper_conf q_shaper_cfg = {0};
+	__maybe_unused struct pmac_port_info *ppi = NULL;
+	__maybe_unused unsigned long bits, i;
+	__maybe_unused bool f_set = false;
+
+#if IS_ENABLED(CONFIG_DPM_DATAPATH_HAL_GSWIP31)
+	return DP_SUCCESS;
+#endif
+	q_conf.inst = q_port->inst;
+	q_conf.q_id = q_port->qid;
+
+	q_shaper_cfg.inst = q_port->inst;
+	q_shaper_cfg.cmd = DP_SHAPER_CMD_ADD;
+	q_shaper_cfg.type = DP_NODE_QUEUE;
+	q_shaper_cfg.id.q_id = q_port->qid;
+	
+	if (_dp_queue_conf_get(&q_conf, flag)) {
+		pr_err("DPM: %s failed for qid=%d\n",
+		       "_dp_queue_conf_get", q_conf.q_id);
+		return DP_FAILURE;
+	}
+
+	ppi = get_dp_port_info(q_port->inst, q_port->dp_port);
+	bits = ppi->alloc_flags;
+
+	/* do special queue configuration for some devices' egress queue.
+	 * For Dociss, we use still default setting by dp_wred_def since doscsis
+	 * systtem will change the default setting.
+	 */
+	for_each_set_bit(i, &bits, __bf_shf(DP_F_DEV_END)) {
+		switch (i) {
+			case __bf_shf(DP_F_FAST_ETH_LAN):
+				q_conf.codel = 1;
+				q_conf.wred_max_allowed = 8192;
+				f_set = true;
+				break;
+			case __bf_shf(DP_F_FAST_ETH_WAN):
+			case __bf_shf(DP_F_DIRECT):
+				q_conf.codel = 1;
+				q_conf.wred_max_allowed = 3072;
+				f_set = true;
+				break;
+			case __bf_shf(DP_F_GPON):
+			case __bf_shf(DP_F_EPON):
+				q_conf.codel = 0;
+				q_conf.wred_max_allowed = 8192;
+				f_set = true;
+				break;
+			case __bf_shf(DP_F_VUNI):
+				q_conf.wred_max_allowed = 8192;
+				f_set = true;
+
+				/* Set the VUNI queue shaper to 8.6Gbps and max burst to 524k */
+				q_shaper_cfg.cir = 0x8339C0;
+				q_shaper_cfg.cbs = 0x80000;
+				if (dp_shaper_conf_set(&q_shaper_cfg, 0)) {
+					pr_err("DPM: dp_shaper_conf_set failed\n");
+					return DP_FAILURE;
+				}
+				break;
+			default:
+				break;
+		}
+	}
+	if (f_set) {
+		if (_dp_queue_conf_set(&q_conf, flag)) {
+			pr_err("DPM: %s failed for qid=%d\n",
+			       "_dp_queue_conf_set", q_conf.q_id);
+			return DP_FAILURE;
+		}
+	}
+
+	return DP_SUCCESS;
+}
+
 static int deq_update_info(struct dp_subif_upd_info *info)
 {
 	int old_cqm_deq_idx, old_num_cqm_deq, old_cqm_deq_port;
@@ -2335,6 +2414,7 @@ static int deq_update_info(struct dp_subif_upd_info *info)
 				kfree(q_port);
 				return DP_FAILURE;
 			}
+			dp_tune_queue_setting(info->inst, q_port, 0);
 		} else {
 			q_port->qid = deq_pinfo->first_qid;
 			q_info = get_dp_q_info(info->inst, q_port->qid);
@@ -2661,6 +2741,7 @@ static int subif_hw_set(int inst, int portid, int subif_ix,
 				kfree(q_port);
 				return DP_FAILURE;
 			}
+			dp_tune_queue_setting(inst, q_port, flags);
 
 		} else if (data->subif_data->flag_ops & DP_SUBIF_SPECIFIC_Q) {
 			DP_DEBUG(DP_DBG_FLAG_QOS,

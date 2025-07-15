@@ -14,7 +14,6 @@
 #include <net/datapath_api.h>
 
 #define MAX_PP_CHILD_PER_NODE   8 /* Maximum queue per scheduler */
-#define MAX_Q_PER_PORT          32 /* Maximum queue per port */
 #define INV_RESV_IDX            0xFFFF  /* Invalid reserved resource index */
 #define DEF_QRED_MAX_ALLOW      0x400  /* max qocc in queue */
 #define DEF_QRED_MIN_ALLOW      0x40 /* minqocc in queue */
@@ -223,6 +222,8 @@ static inline char *node_type_str(enum dp_node_type type)
 		return "sched";
 	if (P_NODE(type))
 		return "port";
+	if (type == 0)
+		return "0";
 
 	pr_err("DPM: unknown node type: %d\n", type);
 	return "??";
