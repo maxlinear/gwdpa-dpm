@@ -12,7 +12,8 @@
 
 #ifndef DATAPATH_H
 #define DATAPATH_H
-
+#include <linux/types.h>
+#include <asm/byteorder.h>
 #include <linux/skbuff.h>	/*skb */
 #include <linux/types.h>
 #include <linux/netdevice.h>
@@ -671,6 +672,40 @@ struct dp_egp {
 	enum DP_EGP_TYPE type; /* EGP port: DP_EGP_TO_DEV, DP_EGP_TO_GSWIP */
 };
 
+struct qos_cqm_info {
+#if (defined(__BYTE_ORDER) && (__BYTE_ORDER == __BIG_ENDIAN)) || defined(__BIG_ENDIAN)
+	u16 num;  /* the nunber of continuous DEq port/ring */
+	u16 base;  /* CQM Deq Port(LGM/PRX)/Ring(TPZ) base */
+#else
+	u16 base;  /* CQM Deq Port(LGM/PRX)/Ring(TPZ) base */
+	u16 num; /* the nunber of continuous DEq port/ring */
+#endif
+};
+
+struct qos_setting_match {
+	char *catagory;
+	u32 flag;
+	int idx_catagory;
+};
+
+struct dp_qos_setting {
+	bool valid;
+	const char *node_name;
+	const char *category;
+	u32 flag;
+	union {
+		u32 qos_id;
+		struct qos_cqm_info cqm_deq;
+	};
+	u32 wred_en;
+	u32 codel_en;
+	u32 qlen;
+
+	/* for debug only */
+	u16 category_idx;
+	u16 sub_category_idx;
+};
+
 #define DP_DFLT_DOMAIN_MEMBER 0xFFFFFFFF
 
 /*! Sub interface detail information */
@@ -928,6 +963,7 @@ struct pmac_port_info {
 	struct cpu_rmap  *rx_cpu_rmap; /*!<CPU Affinity Reverse Map for CQM IRQs */
 #endif /* CONFIG_RFS_ACCEL */
 	u32 data_flag_ops; /* flag_ops from caller */
+	struct dp_qos_setting *dts_qos;
 
 	/* These members must be end. */
 	u32 tail;
@@ -1058,6 +1094,7 @@ struct cqm_port_info {
 	u32 cpu_type;
 	enum CQM_PORT_INFO_FLAG flag; /* other special flags */
 	struct dp_umt_info umt_info[DP_MAX_UMT];
+	struct dp_qos_setting *dts_qos;
 };
 
 struct parser_info {
@@ -1697,6 +1734,24 @@ void dp_gdb_break(void);
 int dp_set_cpu_mac(struct net_device *dev, bool reset);
 extern int n_dp_bp;
 bool dp_has_spare_bp(void);
+int dp_datapath_dts_parse(void);
+int proc_qos_cfg_dump(struct seq_file *s, int pos);
+#if IS_ENABLED(CONFIG_OF)
+void proc_qos_raw_dts_dump(struct seq_file *s);
+#endif
+void proc_qos_category_dump(struct seq_file *s);
+int alloc_flag_str(int flag, char *buf, int buf_len);
+ssize_t proc_dts_raw_write(struct file *file, const char *buf, size_t count,
+			   loff_t *ppos);
+void init_qos_setting(void);
+struct dp_qos_setting* dp_get_qos_cfg(int inst, int dp_port, int alloc_flag, u32 qos_id);
+struct dp_qos_setting* dp_get_inter_qos_cfg(int inst, u32 deq_port);
+
+int dp_qos_get_q_global_parms(int inst, int dp_port, int alloc_flag, u32 qos_id,
+			      struct dp_qos_q_parms *parms);
+
+
+struct net_device *dp_create_netdev(const char *name);
 
 /* These below apis used to seemless switch b/w seqfs and pr_info */
 #define dp_sprintf(seq, fmt, ...) do {\

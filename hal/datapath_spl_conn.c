@@ -63,6 +63,7 @@ static void update_deq_dma_ch(int inst, int egp_id, int ch)
 	deq = get_dp_deqport_info(inst, egp_id);
 	deq->dma_chan = ch;
 	deq->f_dma_ch = 1;
+	deq->dts_qos = dp_get_inter_qos_cfg(inst, egp_id);
 }
 
 static int egp_pre_update(int inst, const struct dp_spl_cfg *conn,
@@ -77,6 +78,10 @@ static int egp_pre_update(int inst, const struct dp_spl_cfg *conn,
 		deq->txpush_addr_qos = egp->tx_push_paddr_qos;
 		deq->tx_ring_size = egp->pp_ring_size;
 		deq->dp_port[conn->dp_port] = 1;
+		/* First blindly set to non-intemediate since no proper way to set yet.
+		 * Later will tune in add_igp API
+		 */
+		deq->dts_qos = dp_get_qos_cfg(inst, CPU_PORT, DP_F_CPU, conn->type);
 	}
 
 	return deq->ref_cnt;

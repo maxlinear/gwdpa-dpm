@@ -2318,6 +2318,9 @@ int32_t dp_register_dev_ext2(int inst, struct module *owner, u32 port_id,
 
 	port_info->res_qid_base = data->qos_resv_q_base;
 	port_info->num_resv_q = data->num_resv_q;
+	port_info->dts_qos = dp_get_qos_cfg(inst, port_id,
+					    port_info->alloc_flags,
+					    data->qos_id);
 
 	cbm_data = dp_kzalloc(sizeof(*cbm_data), GFP_ATOMIC);
 	if (!cbm_data)
@@ -3188,6 +3191,7 @@ static int dp_register_dc(int inst, u32 port_id,
 		deq->tx_ring_size = port->tx_ring_size;
 		deq->tx_pkt_credit = port->tx_pkt_credit;
 		deq->dp_port[port_id] = 1;
+		deq->dts_qos = port->dts_qos;
 
 		/* For G.INT num_dma_chan 8 or 16, for other 1 */
 		if (port->num_dma_chan > 1) {
@@ -4716,6 +4720,7 @@ SKIP_MODULE_DP_DBG_CHECK:
 	 * so there should be no dp_lib_lock during register_netdev_notifier
 	 */
 	register_netdev_notifier(0);
+	init_qos_setting();
 	DP_DUMP("DPM: dp_pre_init done: dp_dbg=%s dp_dbg_flag=0x%llx\n",
 		dp_dbg, dp_dbg_flag);
 

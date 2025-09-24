@@ -1023,6 +1023,8 @@ int alloc_cpu_q(int inst, struct cbm_cpu_port_data *cpu_data,
 	struct dp_cap *cap;
 	struct cbm_tx_push *tx_push = NULL;
 	struct cbm_dp_alloc_data *re_insertion;
+	struct cqm_port_info *deq;
+	struct pmac_port_info *cpu_port;
 
 	if (cpu_idx >= CQM_MAX_CPU)
 		return DP_FAILURE;
@@ -1042,6 +1044,9 @@ int alloc_cpu_q(int inst, struct cbm_cpu_port_data *cpu_data,
 		q_port->tx_ring_addr_push = (void *)re_insertion->txpush_addr;
 		q_port->tx_ring_size = re_insertion->tx_ring_size;
 
+		/* set dts_qos cfg */
+		deq = get_dp_deqport_info(inst, re_insertion->deq_port);
+		deq->dts_qos = dp_get_inter_qos_cfg(inst, re_insertion->deq_port);
 	} else {
 		/* All CPU ports enabled have valid CQM Deq port otherwise -1 */
 		if (tx_push->deq_port == -1)
@@ -1051,6 +1056,11 @@ int alloc_cpu_q(int inst, struct cbm_cpu_port_data *cpu_data,
 		q_port->tx_ring_addr = (void *)tx_push->txpush_addr_qos;
 		q_port->tx_ring_addr_push = (void *)tx_push->txpush_addr;
 		q_port->tx_ring_size = tx_push->tx_ring_size;
+
+		/* set dts_qos cfg */
+		cpu_port = get_dp_port_info(inst, CPU_PORT);
+		deq = get_dp_deqport_info(inst, q_port->cqe_deq);
+		deq->dts_qos = cpu_port->dts_qos;
 	}
 
 	c_info = get_dp_deqport_info(inst, q_port->cqe_deq);
@@ -1118,7 +1128,6 @@ int dp_reinsert_q_set(int inst, struct pmac_port_info *port_info,
 		kfree(lookup);
 		return DP_FAILURE;
 	}
-
 	if (alloc_cpu_q(inst, cpu_data, &q_port, PMAC_CPU_ID, 0, REINSERT)) {
 		kfree(lookup);
 		return DP_FAILURE;
@@ -1183,6 +1192,10 @@ void save_subif_info(int inst, struct cbm_cpu_port_data *cpu_data,
 
 	subif_info->spl_conn_type = DP_NON_SPL;
 #endif
+	cpu_port->alloc_flags = DP_F_CPU;
+	subif_info->port_info = cpu_port;
+
+	subif_info->flags = 1;
 }
 
 static int dev_platform_set(int inst, u8 ep, struct dp_dev_data *data,
@@ -1190,6 +1203,7 @@ static int dev_platform_set(int inst, u8 ep, struct dp_dev_data *data,
 {
 	struct gsw_itf *itf;
 	struct hal_priv *priv = (struct hal_priv *)dp_port_prop[inst].priv_hal;
+	struct pmac_port_info *port_info = get_dp_port_info(inst, ep);
 
 	if (!priv) {
 		pr_err("DPM: %s: priv is NULL\n", __func__);
@@ -1199,7 +1213,7 @@ static int dev_platform_set(int inst, u8 ep, struct dp_dev_data *data,
 		dp_free_deq_port(inst, ep, data, flags);
 
 	itf = dp_gsw_assign_ctp(inst, ep, priv->bp_def, flags, data);
-	get_dp_port_info(inst, ep)->itf_info = itf;
+	port_info->itf_info = itf;
 
 	dp_node_reserve(inst, ep, data, flags);
 
@@ -1210,6 +1224,17 @@ static int dev_platform_set(int inst, u8 ep, struct dp_dev_data *data,
 	}
 	dev_platform_set_aca_rxout_queue(inst, ep, flags);
 #endif
+
+	/* set streaming port related deq port qos cfg */
+	if (!(port_info->alloc_flags & DP_F_ACA)) {
+		int i;
+		struct cqm_port_info *deq;
+
+		for (i = 0; i < port_info->deq_port_num; i++) {
+			deq = get_dp_deqport_info(inst, port_info->deq_ports[i]);
+			deq->dts_qos = port_info->dts_qos;
+		}
+	}
 
 	return DP_SUCCESS;
 }
@@ -1278,6 +1303,66 @@ static int cpu_mode_table_cfg(int inst)
 	return DP_SUCCESS;
 }
 
+static int dp_cpu_netdev(int inst, int cpu_id, int vap, int idx, int flag)
+{
+	char net_name[20];
+	dp_subif_t *subif_sync = dp_kmalloc(sizeof(*subif_sync), GFP_KERNEL);
+	struct pmac_port_info *cpu_port = get_dp_port_info(inst, CPU_PORT);
+	struct dp_subif_info *sif;
+	struct net_device *netif = NULL;
+
+
+	if (!subif_sync)
+		return -1;
+	sprintf(net_name, "cpu%d_%d_%d", cpu_id, vap, inst);
+	dp_memset(subif_sync, 0, sizeof(*subif_sync));
+	subif_sync->inst = inst;
+	sif = get_dp_port_subif(cpu_port, vap);
+	if (!sif->flags)
+		return -1;
+
+	/* copy common port flag */
+	subif_sync->subif_port_cmn = cpu_port->subif_port_cmn;
+
+	subif_sync->subif_common.def_qlist[0] = sif->qid;
+	subif_sync->subif_common.num_q =  1;
+	subif_sync->data_flag = idx ?
+				DP_SUBIF_CPU_LOW_PRI : DP_SUBIF_CPU_HIGH_PRI;
+	subif_sync->subif_list[0] = sif->subif;
+#if IS_ENABLED(CONFIG_DPM_DATAPATH_HAL_GSWIP32)
+	subif_sync->gpid_list[0] = sif->gpid;
+#endif
+	subif_sync->subif_flag[0] = sif->subif_flag;
+	subif_sync->subif_num = 1;
+	
+	netif = dp_create_netdev(net_name);
+	if (!netif) {
+		kfree(subif_sync);
+		pr_err("dpm: dp_create_netdev failed\n");
+		return -1;
+	}
+	sif->netif = netif;
+
+	subif_sync->subif_common.bport = 0;
+	subif_sync->subif_common.subif_groupid = vap;
+	subif_sync->type = sif->type;
+
+	if (!subif_sync->subif_num) {
+		kfree(subif_sync);
+		pr_err("dpm: dp_cpu_netdev failed\n");
+		return -1;
+	}
+
+	if (dp_update_subif(netif, NULL, subif_sync, netif->name, 0, NULL)) {
+		kfree(subif_sync);
+		pr_err("DPM: %s: dp_update_subif failed: %s\n", __func__,
+		       sif->netif->name);
+		return -1;
+	}
+
+	kfree(subif_sync);
+	return 0;
+}
 static int dp_platform_queue_set(int inst, u32 flag)
 {
 	struct {
@@ -1360,6 +1445,7 @@ static int dp_platform_queue_set(int inst, u32 flag)
 	}
 
 	cpu_port->deq_port_base = 0;
+	cpu_port->dts_qos = dp_get_qos_cfg(inst, CPU_PORT, DP_F_CPU, 0);
 	dp_cpu_init_ok = 1;
 	cap = &get_dp_prop_info(inst)->cap;
 	if (cap->max_cpu > CQM_MAX_CPU)
@@ -1469,6 +1555,7 @@ static int dp_platform_queue_set(int inst, u32 flag)
 				cpu_port_num++;
 			}
 #endif
+			dp_cpu_netdev(inst, cpu_id, vap, cpu_port_num, flag);
 		}
 	}
 
@@ -1659,7 +1746,6 @@ ERROR:
 	if (port_remark)
 		kfree(port_remark);
 	return DP_FAILURE;
-
 }
 
 /* API to enable GSWIP PCE processing for PON port
@@ -2290,85 +2376,6 @@ int free_q(int inst, int dp_port, int qid, struct cqm_port_info *deq_pinfo,
 	return DP_SUCCESS;
 }
 
-static int dp_tune_queue_setting(int inst, struct ppv4_q_sch_port *q_port,
-				 int flag)
-{
-	__maybe_unused struct dp_queue_conf q_conf = {0};
-	__maybe_unused struct dp_shaper_conf q_shaper_cfg = {0};
-	__maybe_unused struct pmac_port_info *ppi = NULL;
-	__maybe_unused unsigned long bits, i;
-	__maybe_unused bool f_set = false;
-
-#if IS_ENABLED(CONFIG_DPM_DATAPATH_HAL_GSWIP31)
-	return DP_SUCCESS;
-#endif
-	q_conf.inst = q_port->inst;
-	q_conf.q_id = q_port->qid;
-
-	q_shaper_cfg.inst = q_port->inst;
-	q_shaper_cfg.cmd = DP_SHAPER_CMD_ADD;
-	q_shaper_cfg.type = DP_NODE_QUEUE;
-	q_shaper_cfg.id.q_id = q_port->qid;
-	
-	if (_dp_queue_conf_get(&q_conf, flag)) {
-		pr_err("DPM: %s failed for qid=%d\n",
-		       "_dp_queue_conf_get", q_conf.q_id);
-		return DP_FAILURE;
-	}
-
-	ppi = get_dp_port_info(q_port->inst, q_port->dp_port);
-	bits = ppi->alloc_flags;
-
-	/* do special queue configuration for some devices' egress queue.
-	 * For Dociss, we use still default setting by dp_wred_def since doscsis
-	 * systtem will change the default setting.
-	 */
-	for_each_set_bit(i, &bits, __bf_shf(DP_F_DEV_END)) {
-		switch (i) {
-			case __bf_shf(DP_F_FAST_ETH_LAN):
-				q_conf.codel = 1;
-				q_conf.wred_max_allowed = 8192;
-				f_set = true;
-				break;
-			case __bf_shf(DP_F_FAST_ETH_WAN):
-			case __bf_shf(DP_F_DIRECT):
-				q_conf.codel = 1;
-				q_conf.wred_max_allowed = 3072;
-				f_set = true;
-				break;
-			case __bf_shf(DP_F_GPON):
-			case __bf_shf(DP_F_EPON):
-				q_conf.codel = 0;
-				q_conf.wred_max_allowed = 8192;
-				f_set = true;
-				break;
-			case __bf_shf(DP_F_VUNI):
-				q_conf.wred_max_allowed = 8192;
-				f_set = true;
-
-				/* Set the VUNI queue shaper to 8.6Gbps and max burst to 524k */
-				q_shaper_cfg.cir = 0x8339C0;
-				q_shaper_cfg.cbs = 0x80000;
-				if (dp_shaper_conf_set(&q_shaper_cfg, 0)) {
-					pr_err("DPM: dp_shaper_conf_set failed\n");
-					return DP_FAILURE;
-				}
-				break;
-			default:
-				break;
-		}
-	}
-	if (f_set) {
-		if (_dp_queue_conf_set(&q_conf, flag)) {
-			pr_err("DPM: %s failed for qid=%d\n",
-			       "_dp_queue_conf_set", q_conf.q_id);
-			return DP_FAILURE;
-		}
-	}
-
-	return DP_SUCCESS;
-}
-
 static int deq_update_info(struct dp_subif_upd_info *info)
 {
 	int old_cqm_deq_idx, old_num_cqm_deq, old_cqm_deq_port;
@@ -2414,7 +2421,6 @@ static int deq_update_info(struct dp_subif_upd_info *info)
 				kfree(q_port);
 				return DP_FAILURE;
 			}
-			dp_tune_queue_setting(info->inst, q_port, 0);
 		} else {
 			q_port->qid = deq_pinfo->first_qid;
 			q_info = get_dp_q_info(info->inst, q_port->qid);
@@ -2741,8 +2747,6 @@ static int subif_hw_set(int inst, int portid, int subif_ix,
 				kfree(q_port);
 				return DP_FAILURE;
 			}
-			dp_tune_queue_setting(inst, q_port, flags);
-
 		} else if (data->subif_data->flag_ops & DP_SUBIF_SPECIFIC_Q) {
 			DP_DEBUG(DP_DBG_FLAG_QOS,
 				 "Queue decision: %s\n", "specified_queue");
@@ -2764,7 +2768,6 @@ static int subif_hw_set(int inst, int portid, int subif_ix,
 
 			q_port->qid = data->subif_data->q_id;
 			q_port->q_node = q_info->q_node_id;
-
 		} else {
 			DP_DEBUG(DP_DBG_FLAG_QOS,
 				 "Queue decision:%s\n", "shared_queue");
@@ -2976,7 +2979,6 @@ static int subif_hw_reset(int inst, int portid, int subif_ix,
 			for (k = 0; k < port_info->rx_ring[i].num_out_cqm_deq_port; k++) {
 				get_dp_deqport_info(inst, port_info->rx_ring[i].out_cqm_deq_port_id + k)->ref_cnt--;
 			}
-
 		}
 
 		if (port_info->num_dma_chan)
@@ -3396,6 +3398,7 @@ static int dev_platform_set_aca_rxout_queue(int inst, u8 ep, uint32_t flags)
 			deq->tx_ring_size = egp->tx_ring_size;
 			deq->tx_pkt_credit = egp->tx_pkt_credit;
 			deq->dp_port[shared_dc_deq_dpid] = 1;
+			deq->dts_qos = dp_get_inter_qos_cfg(inst, q_port->cqe_deq);
 
 			/* create queue/port */
 			q_port->tx_pkt_credit = deq->tx_pkt_credit;

@@ -911,11 +911,11 @@ static int ext_vlan_action_cfg(struct core_ops *ops,
 	switch (act->push_n) {
 	case 2:
 		pcfg->bAddInnerVlan = LTQ_TRUE;
-		ret = ext_vlan_insert(ops, &pcfg->sInnerVlan, act, 1);
+		ret = ext_vlan_insert(ops, &pcfg->sInnerVlan, act, 0);
 		if (ret)
 			return ret;
 		pcfg->bAddOuterVlan = LTQ_TRUE;
-		return ext_vlan_insert(ops, &pcfg->sOuterVlan, act, 0);
+		return ext_vlan_insert(ops, &pcfg->sOuterVlan, act, 1);
 	case 1:
 		pcfg->bAddOuterVlan = LTQ_TRUE;
 		return ext_vlan_insert(ops, &pcfg->sOuterVlan, act, 0);

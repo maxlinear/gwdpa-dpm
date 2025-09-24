@@ -107,12 +107,16 @@ struct fn_list fn_list[] = {
 #endif
 #endif /*CONFIG_DPM_DATAPATH_SWITCHDEV*/
 	{"dp_dev_update_toe", &dp_dev_update_toe_fn, &dp_dev_update_toe2},
+#if IS_ENABLED(CONFIG_MXL_VPN)
 	{"dp_xdo_dev_state_add", &dp_xdo_dev_state_add_fn, &dp_xdo_dev_state_add2},
 	{"dp_xdo_dev_state_delete", &dp_xdo_dev_state_delete_fn, &dp_xdo_dev_state_delete2},
 	{"dp_xdo_dev_offload_ok", &dp_xdo_dev_offload_ok_fn, &dp_xdo_dev_offload_ok2},
+	{"dp_xdo_dev_state_advance_esn", &dp_xdo_dev_state_advance_esn_fn, &dp_xdo_dev_state_advance_esn2},
 	{"dp_dev_update_xfrm", &dp_dev_update_xfrm_fn, &dp_dev_update_xfrm2},
+#endif
 	{"dp_get_ts_info", &dp_get_ts_info_fn, &dp_get_ts_info2},
 	{"dp_ndo_do_ioctl", &dp_ndo_do_ioctl_fn, &dp_ndo_do_ioctl2},
+	{"dp_qos_get_q_global_parms", &dp_qos_get_q_global_parms_fn, &dp_qos_get_q_global_parms2},
 };
 
 

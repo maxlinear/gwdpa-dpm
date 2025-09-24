@@ -1612,5 +1612,45 @@ void dp_dump_debugfs_qos_all(void)
 EXPORT_SYMBOL(dp_dump_debugfs_qos_all);
 #endif
 
+/* may multiple flags */
+int alloc_flag_str(int flag, char *buf, int buf_len)
+{
+	int i, len = 0;
+
+	if (!buf)
+		return -1;
+
+	buf[0] = '\0';
+	if (flag == -1) {
+		dp_strlcpy(buf, "-1", buf_len);
+		return 0;
+	} else if (flag == 0) {
+		dp_strlcpy(buf, "0", buf_len);
+		return 0;
+	}
+	/* need support multiple flags */
+	for (i = 0; i < get_dp_port_type_str_size(); i++) {
+		if (!(flag & dp_port_flag[i]))
+			continue;
+		/* check buffer size */
+		if (len + strlen(dp_port_type_str[i]) + 2 >= buf_len)
+			break; /* buffer not enough */
+
+		dp_strlcpy(buf + len, dp_port_type_str[i],
+		           buf_len - len);
+		len += strlen(dp_port_type_str[i]);
+
+		buf[len] = '|';
+		len++;
+
+		buf[len] = '\0';
+	}
+
+	/* remove last | character */
+	if (len > 0 && buf[len - 1] == '|')
+		buf[len - 1] = '\0';
+	return 0;
+}
+
 /* disable optimization in debug mode: pop */
 DP_NO_OPTIMIZE_POP

@@ -156,6 +156,8 @@ struct xfrm_state;
 int dp_xdo_dev_state_add2(struct xfrm_state *x);
 void dp_xdo_dev_state_delete2(struct xfrm_state *x);
 bool dp_xdo_dev_offload_ok2(struct sk_buff *skb, struct xfrm_state *x);
+void dp_xdo_dev_state_advance_esn2(struct xfrm_state *x);
+
 /* xfrm dev capability update */
 int dp_dev_update_xfrm2(struct net_device *dev);
 
@@ -167,5 +169,7 @@ int dp_ndo_do_ioctl2(struct net_device *dev, struct ifreq *ifr, int cmd);
 int dp_get_netif_stats2(struct net_device *dev, dp_subif_t *subif_id,
 			struct rtnl_link_stats64 *stats, u32 flags);
 
+int dp_qos_get_q_global_parms2(int inst, int dp_port, int alloc_flag,
+			       u32 qos_id, struct dp_qos_q_parms *parms);
 
 #endif

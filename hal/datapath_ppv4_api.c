@@ -2076,6 +2076,27 @@ static int set_parent_arbi(int inst, int node_id, int arbi, int flag)
 	return DP_SUCCESS;
 }
 
+int dp_set_qos_cfg(struct dp_node_link *info, struct pp_qos_queue_conf *q_cfg)
+{
+	struct cqm_port_info *deq;
+
+	if (!q_cfg)
+		return -1;
+	deq = get_dp_deqport_info(info->inst, info->cqm_deq_port.cqm_deq_port);
+
+	if (deq->dts_qos) {
+		q_cfg->codel_en = deq->dts_qos->codel_en;
+		q_cfg->wred_enable = deq->dts_qos->wred_en;
+		q_cfg->wred_max_allowed = deq->dts_qos->qlen;
+	} else {
+		pr_err("dpm: why deq->dts_qos for cqm_deq_port=%d\n",
+		       info->cqm_deq_port.cqm_deq_port);
+		return -1;
+	}
+
+	return 0;
+}
+
 /* Configure node and link to parent.
  * Upon success return DP_SUCCESS
  * else return DP_FAILURE
@@ -2111,8 +2132,9 @@ static int dp_node_link_parent_set(
 
 		dp_qos_queue_conf_set_default(q_cfg);
 		if (PP_ALLOC(q_stat->flag)) {
-			dp_wred_def(q_cfg);
+			dp_set_qos_cfg(info, q_cfg);
 		} else {
+			/* seems never go here according to current design */
 			if (dp_qos_queue_conf_get(priv->qdev, node_id,
 						  q_cfg)) {
 				kfree(q_cfg);
@@ -2121,7 +2143,6 @@ static int dp_node_link_parent_set(
 				return DP_FAILURE;
 			}
 		}
-
 		q_cfg->queue_child_prop.parent = pid;
 		if (info->arbi == ARBITRATION_WRR)
 			q_cfg->queue_child_prop.wrr_weight = info->prio_wfq;
@@ -3004,16 +3025,11 @@ int _dp_queue_conf_set(struct dp_queue_conf *cfg, int flag)
 		q_cfg->blocked = 0;
 
 	priv->qos_queue_stat[cfg->q_id].blocked = q_cfg->blocked;
-	if (cfg->drop == DP_QUEUE_DROP_WRED) {
-		q_cfg->codel_en = 0;
+	if (cfg->drop == DP_QUEUE_DROP_WRED)
 		q_cfg->wred_enable = 1;
-	}
 
-	if (cfg->codel == DP_CODEL_EN) {
-		q_cfg->wred_enable = 0;
+	if (cfg->codel == DP_CODEL_EN)
 		q_cfg->codel_en = 1;
-	} else if (cfg->codel == DP_CODEL_DIS)
-		q_cfg->codel_en = 0;
 
 	q_cfg->wred_min_avg_green = cfg->min_size[0];
 	q_cfg->wred_max_avg_green = cfg->max_size[0];

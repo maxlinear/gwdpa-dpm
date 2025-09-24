@@ -53,6 +53,9 @@ DP_NO_OPTIMIZE_PUSH
 #define DBGFS_HOOKS		"hooks"
 #define DBGFS_GDB		"gdb"
 #define DBGFS_BP		"bp_pmapper"
+#define DBGFS_DTS_RAW           "dts_raw"
+#define DBGFS_DTS               "dts"
+#define DBGFS_DTS_CATEGORY      "dts_category"
 
 #define DEBUGFS_DBG DP_DEBUGFS_PATH	"/" DBGFS_DBG
 #define DBG_CTP DP_DEBUGFS_PATH		"/" DBGFS_CTP_LIST
@@ -973,6 +976,15 @@ int proc_port_dump_one(struct seq_file *s, int pos)
 			   "dma-ctrl", cid, "port", pid, "channel", nid);
 	}
 
+	if (port->dts_qos)
+		dp_sprintf(s, "    dts_qos       :    node_name=%s category=%s index=%d/%d\n",
+			   port->dts_qos->node_name,
+			   port->dts_qos->category,
+			   port->dts_qos->category_idx,
+			   port->dts_qos->sub_category_idx);
+	else
+		dp_sprintf(s, "    dts_qos       :    NULL\n");
+
 	return pos;
 
 }
@@ -1784,6 +1796,14 @@ void dp_dump_one_deq_port(struct seq_file *s, int deq_port,
 	dp_sprintf(s, "  %-20s: 0x%px\n", "txpush_addr", deq->txpush_addr);
 	dp_sprintf(s, "  %-20s: 0x%px\n", "txpush_addr_qos", deq->txpush_addr_qos);
 	dp_sprintf(s, "  %-20s: %d\n", "tx_ring_size", deq->tx_ring_size);
+	if (deq->dts_qos)
+		dp_sprintf(s, "  %-20s: node_name=%s category=%s index=%d/%d\n",
+			   "dts_qos",
+			   deq->dts_qos->node_name, deq->dts_qos->category,
+			   deq->dts_qos->category_idx,
+			   deq->dts_qos->sub_category_idx);
+	else
+		dp_sprintf(s, "  %-20s: NULL\n", "dts_qos");
 }
 
 int proc_registration_deq_port_dump(struct seq_file *s, int pos)
@@ -1968,7 +1988,12 @@ static struct dp_proc_entry dp_proc_entries[] = {
 #endif
 	{DBGFS_GDB, proc_gdb_read, NULL, NULL, proc_gdb_write},
 	{DBGFS_BP, NULL, proc_bp_pmapper_dump, NULL, NULL},
-/* last place holder */
+#if IS_ENABLED(CONFIG_OF)
+	{DBGFS_DTS_RAW, proc_qos_raw_dts_dump, NULL, NULL, proc_dts_raw_write},
+#endif
+	{DBGFS_DTS, NULL, proc_qos_cfg_dump, NULL, NULL},
+	{DBGFS_DTS_CATEGORY, proc_qos_category_dump, NULL, NULL, NULL},
+	/* last place holder */
 	{NULL, NULL, NULL, NULL, NULL}
 };
 

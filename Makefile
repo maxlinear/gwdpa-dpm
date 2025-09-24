@@ -17,6 +17,7 @@ gwdpa-dpm-y += hal/datapath_proc.o hal/datapath_mib_proc.o
 gwdpa-dpm-y += hal/datapath_mib.o
 gwdpa-dpm-$(CONFIG_DEBUG_FS) += datapath_proc_api.o
 gwdpa-dpm-$(CONFIG_DEBUG_FS) += datapath_gdb_wa.o
+gwdpa-dpm-y += datapath_dts.o datapath_netdev.o
 
 gwdpa-dpm-y += datapath_proc.o datapath_proc_qos.o
 gwdpa-dpm-$(CONFIG_EVENT_TRACING) += datapath_trace.o

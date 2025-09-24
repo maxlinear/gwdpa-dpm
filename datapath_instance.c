@@ -296,12 +296,14 @@ static int dp_inst_register_xfrm_ops(struct net_device *dev, int reset)
 	static const int offset[] = {
 		offsetof(struct xfrmdev_ops, xdo_dev_state_add),
 		offsetof(struct xfrmdev_ops, xdo_dev_state_delete),
-		offsetof(struct xfrmdev_ops, xdo_dev_offload_ok)
+		offsetof(struct xfrmdev_ops, xdo_dev_offload_ok),
+		offsetof(struct xfrmdev_ops, xdo_dev_state_advance_esn)
 	};
 	static const char *memo[] = {
 		"dpm-xdo_dev_state_add",
 		"dpm-xdo_dev_state_delete",
-		"dpm-xdo_dev_offload_ok"
+		"dpm-xdo_dev_offload_ok",
+		"dpm-xdo_dev_state_advance_esn"
 	};
 	void *cb[ARRAY_SIZE(offset)] = {NULL};
 	u32 pflag = (DP_F_FAST_ETH_WAN | DP_F_FAST_DSL | DP_F_VUNI |
@@ -336,6 +338,7 @@ static int dp_inst_register_xfrm_ops(struct net_device *dev, int reset)
 		cb[0] =	vpn->add_xfrm_sa;
 		cb[1] = vpn->delete_xfrm_sa;
 		cb[2] = vpn->xfrm_offload_ok;
+		cb[3] = vpn->state_advance_esn;
 	}
 
 	for (i = 0; i < ARRAY_SIZE(offset); i++) {
@@ -406,6 +409,21 @@ bool dp_xdo_dev_offload_ok2(struct sk_buff *skb, struct xfrm_state *x)
 	return false;
 }
 EXPORT_SYMBOL(dp_xdo_dev_offload_ok2);
+
+void dp_xdo_dev_state_advance_esn2(struct xfrm_state *x)
+{
+#if IS_ENABLED(CONFIG_MXL_VPN)
+	struct mxl_vpn_ops *vpn;
+
+	vpn = dp_get_vpn_ops(0);
+	if (!vpn) {
+		pr_err("Invalid vpn ops\n");
+		return;
+	}
+	vpn->state_advance_esn(x);
+#endif
+}
+EXPORT_SYMBOL(dp_xdo_dev_state_advance_esn2);
 
 static void dp_inst_register_toe(struct net_device *dev, int reset)
 {

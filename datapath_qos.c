@@ -494,7 +494,7 @@ int dp_deq_port_res_get2(struct dp_dequeue_res *res, int flag)
 		sif = get_dp_port_subif(port, subif->subif_groupid);
 		res->dp_port = subif->port_id;
 		res->cqm_deq_idx = sif->cqm_port_idx;
-		res->num_deq_ports = sif->num_egp;
+		res->num_deq_ports = subif->num_q;
 		kfree(subif);
 		subif = NULL;
 	}
