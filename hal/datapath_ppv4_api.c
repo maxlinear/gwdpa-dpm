@@ -3078,11 +3078,6 @@ int _dp_queue_conf_get(struct dp_queue_conf *cfg, int flag)
 	else
 		cfg->act = DP_NODE_EN;
 
-	if (q_cfg->codel_en)
-		cfg->codel = DP_CODEL_EN;
-	else
-		cfg->codel = DP_CODEL_DIS;
-
 	if (q_cfg->wred_enable) {
 		cfg->drop = DP_QUEUE_DROP_WRED;
 		cfg->min_size[0] = q_cfg->wred_min_avg_green;
