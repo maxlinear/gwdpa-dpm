@@ -3078,6 +3078,11 @@ int _dp_queue_conf_get(struct dp_queue_conf *cfg, int flag)
 	else
 		cfg->act = DP_NODE_EN;
 
+	if (q_cfg->codel_en)
+		cfg->codel = DP_CODEL_EN;
+	else
+		cfg->codel = DP_CODEL_DIS;
+
 	if (q_cfg->wred_enable) {
 		cfg->drop = DP_QUEUE_DROP_WRED;
 		cfg->min_size[0] = q_cfg->wred_min_avg_green;
@@ -4402,9 +4407,16 @@ int dp_get_queue_mib(struct dp_qos_queue_info *info, int flag)
 	info->qocc = q_stat.queue_packets_occupancy;
 	info->qacc = q_stat.total_packets_accepted;
 	info->qdrp = q_stat.total_packets_dropped;
+#ifdef DP_QOS_QUEUE_INFO_HAS_BYTE_STATS
+	info->qocc_bytes = q_stat.queue_bytes_occupancy;
+	info->qacc_bytes = q_stat.total_bytes_accepted;
+	info->qdrp_bytes = q_stat.total_bytes_dropped;
 
-	DP_DEBUG(DP_DBG_FLAG_QOS, "%s: Q:%d, qocc=%d, qacc=%d, qdrp=%d\n",
-		 __func__, info->nodeid, info->qocc, info->qacc, info->qdrp);
+	DP_DEBUG(DP_DBG_FLAG_QOS,
+		 "%s: Q:%d, qocc=%d, qacc=%d, qdrp=%d, qocc_b=%llu, qacc_b=%llu, qdrp_b=%llu\n",
+		 __func__, info->nodeid, info->qocc, info->qacc, info->qdrp,
+		 info->qocc_bytes, info->qacc_bytes, info->qdrp_bytes);
+#endif
 
 	return DP_SUCCESS;
 }
