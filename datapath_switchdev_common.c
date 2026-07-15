@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*****************************************************************************
- * Copyright (c) 2022 - 2023 MaxLinear, Inc.
+ * Copyright (c) 2022 - 2026 MaxLinear, Inc.
  *
  * For licensing information, see the file 'LICENSE' in the root folder of
  * this software module.
@@ -936,10 +936,16 @@ int dp_set_one_bp_member(struct dp_dev *dp_dev, struct list_head *head)
 
 	if (!bpcfg)
 		return DP_FAILURE;
-	dev_sif = list_first_entry(&dp_dev->subif_list,
-				   struct dp_dev_subif, list);
 	if (!is_dev_dpm_register(dp_dev)) /* do nothing */
 		goto EXIT;
+	if (dp_dev->inst < 0 || dp_dev->bp <= 0) {
+		DP_DEBUG(DP_DBG_FLAG_SWDEV,
+			 "skip bp member cfg %s: inst=%d bp=%d\n",
+			 dp_dev->dev->name, dp_dev->inst, dp_dev->bp);
+		goto EXIT;
+	}
+	dev_sif = list_first_entry(&dp_dev->subif_list,
+				   struct dp_dev_subif, list);
 
 #ifdef need_check_later
 	if (is_vlan_dev(dp_dev->dev)) {
@@ -1106,9 +1112,19 @@ static int dp_reset_one_bp(struct dp_dev *dp_dev)
 			goto EXIT;
 		}
 		/* workaround done */
-		dp_dev->inst = -1;
-		dp_dev->ep = -1;
-		dp_dev->bp = -1;
+		if (!dp_dev->count) {
+			/* Only reset identity if device is not registered
+			 * with DPM. Otherwise inst/ep/bp must be preserved
+			 * for bridge re-join after link flap events.
+			 */
+			dp_dev->inst = -1;
+			dp_dev->ep = -1;
+			dp_dev->bp = -1;
+		} else {
+			pr_info("DPM: %s: preserving inst=%d ep=%d bp=%d for %s (count=%d)\n",
+				__func__, dp_dev->inst, dp_dev->ep,
+				dp_dev->bp, dp_dev->dev->name, dp_dev->count);
+		}
 	}
 	ret = DP_SUCCESS;
 EXIT:
@@ -1133,8 +1149,11 @@ static int dp_set_all_bp_member(struct dp_dev *dp_dev)
 	}
 
 	/* loop each bridge port device to set its bp member */
-	list_for_each_entry(pos, &dp_dev->br_info->bp_list, list)
+	list_for_each_entry(pos, &dp_dev->br_info->bp_list, list) {
+		if (!is_dev_dpm_register(pos->dp_dev))
+			continue;
 		dp_set_one_bp_member(pos->dp_dev, &dp_dev->br_info->bp_list);
+	}
 
 	ret = DP_SUCCESS;
 EXIT:

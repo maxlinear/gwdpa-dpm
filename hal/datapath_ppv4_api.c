@@ -159,6 +159,27 @@ int qos_platform_set(int cmd_id, void *node, int flag)
 	case CODEL_GET:
 		res = dp_codel_cfg_get(node, flag);
 		break;
+	case GPID_GROUP_CREATE:
+		res = dp_gpid_grp_create(node, flag);
+		break;
+	case GPID_GROUP_DELETE:
+		res = dp_gpid_grp_delete(node, flag);
+		break;
+	case GPID_GROUP_UPDATE:
+		res = dp_gpid_grp_update(node, flag);
+		break;
+	case GPID_GROUP_ADD_PORT:
+		res = dp_gpid_grp_add_port(node, flag);
+		break;
+	case GPID_GROUP_DEL_PORT:
+		res = dp_gpid_grp_del_port(node, flag);
+		break;
+	case GPID_GROUP_RULE_ADD:
+		res = dp_gpid_grp_rule_add(node, flag);
+		break;
+	case GPID_GROUP_RULE_DEL:
+		res = dp_gpid_grp_rule_del(node, flag);
+		break;
 	default:
 		pr_err("DPM: %s Unsupported cmd_id %d\n", __func__, cmd_id);
 		res = DP_FAILURE;
@@ -4455,6 +4476,116 @@ int dp_codel_cfg_get(struct dp_qos_codel_cfg *cfg, int flag)
 
 	cfg->target_delay_msec = pp_cfg.target_delay_msec;
 	cfg->interval_time_msec = pp_cfg.interval_time_msec;
+
+	return DP_SUCCESS;
+}
+
+int dp_gpid_grp_create(void *cfg, int flag)
+{
+	struct dp_gpid_group_cfg *grp_cfg = (struct dp_gpid_group_cfg *)cfg;
+	int ret;
+
+	ret = pp_gpid_group_create(grp_cfg->name, (struct pp_cpu_info *)grp_cfg->info,
+				   grp_cfg->num_cpus);
+	if (ret < 0) {
+		pr_err("DPM: %s pp_gpid_group_create failed: %d\n",
+		       __func__, ret);
+		return ret;
+	}
+
+	return ret; /* Return group ID on success */
+}
+
+int dp_gpid_grp_delete(void *cfg, int flag)
+{
+	struct dp_gpid_group_cfg *grp_cfg = (struct dp_gpid_group_cfg *)cfg;
+	int ret;
+
+	ret = pp_gpid_group_delete(grp_cfg->id);
+	if (ret < 0) {
+		pr_err("DPM: %s pp_gpid_group_delete failed: %d\n",
+		       __func__, ret);
+		return ret;
+	}
+
+	return DP_SUCCESS;
+}
+
+int dp_gpid_grp_update(void *cfg, int flag)
+{
+	struct dp_gpid_group_cfg *grp_cfg = (struct dp_gpid_group_cfg *)cfg;
+	int ret;
+
+	ret = pp_gpid_group_update(grp_cfg->id, (struct pp_cpu_info *)grp_cfg->info,
+				   grp_cfg->num_cpus);
+	if (ret < 0) {
+		pr_err("DPM: %s pp_gpid_group_update failed: %d\n",
+		       __func__, ret);
+		return ret;
+	}
+
+	return DP_SUCCESS;
+}
+
+int dp_gpid_grp_add_port(void *cfg, int flag)
+{
+	struct dp_gpid_group_cfg *grp_cfg = (struct dp_gpid_group_cfg *)cfg;
+	int ret;
+
+	ret = pp_gpid_group_add_port(grp_cfg->id, grp_cfg->gpid,
+				     grp_cfg->prio);
+	if (ret < 0) {
+		pr_err("DPM: %s pp_gpid_group_add_port failed: %d\n",
+		       __func__, ret);
+		return ret;
+	}
+
+	return DP_SUCCESS;
+}
+
+int dp_gpid_grp_del_port(void *cfg, int flag)
+{
+	struct dp_gpid_group_cfg *grp_cfg = (struct dp_gpid_group_cfg *)cfg;
+	int ret;
+
+	ret = pp_gpid_group_del_port(grp_cfg->id, grp_cfg->gpid);
+	if (ret < 0) {
+		pr_err("DPM: %s pp_gpid_group_del_port failed: %d\n",
+		       __func__, ret);
+		return ret;
+	}
+
+	return DP_SUCCESS;
+}
+
+int dp_gpid_grp_rule_add(void *cfg, int flag)
+{
+	struct dp_gpid_group_cfg *grp_cfg = (struct dp_gpid_group_cfg *)cfg;
+	int ret;
+
+	ret = pp_gpid_group_rule_add(grp_cfg->id, grp_cfg->prio,
+				     (struct pp_whitelist_field *)grp_cfg->fields, grp_cfg->cnt);
+	if (ret < 0) {
+		pr_err("DPM: %s pp_gpid_group_rule_add failed: %d\n",
+		       __func__, ret);
+		return ret;
+	}
+
+	return DP_SUCCESS;
+}
+
+int dp_gpid_grp_rule_del(void *cfg, int flag)
+{
+	struct dp_gpid_group_cfg *grp_cfg = (struct dp_gpid_group_cfg *)cfg;
+	int ret;
+
+	ret = pp_gpid_group_rule_del(grp_cfg->id, grp_cfg->prio,
+				     (struct pp_whitelist_field *)grp_cfg->fields, grp_cfg->cnt);
+	if (ret < 0) {
+		pr_err("DPM: %s pp_gpid_group_rule_del failed: %d\n",
+		       __func__, ret);
+		return ret;
+	}
 
 	return DP_SUCCESS;
 }

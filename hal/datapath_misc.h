@@ -534,6 +534,14 @@ int proc_mib_count_init(void *param);
 int dp_codel_cfg_get(struct dp_qos_codel_cfg *cfg, int flag);
 int dp_codel_cfg_set(struct dp_qos_codel_cfg *cfg, int flag);
 
+int dp_gpid_grp_create(void *cfg, int flag);
+int dp_gpid_grp_delete(void *cfg, int flag);
+int dp_gpid_grp_update(void *cfg, int flag);
+int dp_gpid_grp_add_port(void *cfg, int flag);
+int dp_gpid_grp_del_port(void *cfg, int flag);
+int dp_gpid_grp_rule_add(void *cfg, int flag);
+int dp_gpid_grp_rule_del(void *cfg, int flag);
+
 inline static void dp_rx_handle_fcs(struct pmac_port_info *port_info, u32 subif,
 				    struct sk_buff *skb)
 {

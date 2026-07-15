@@ -10,6 +10,7 @@
 
 #include <net/datapath_api.h>
 #include <net/datapath_api_qos.h>
+#include "datapath_api_fn.h"
 #include "datapath.h"
 #include "datapath_trace.h"
 
@@ -798,6 +799,208 @@ int dp_qos_codel_cfg_get2(struct dp_qos_codel_cfg *cfg, int flag)
 
 	return dp_info->dp_qos_platform_set(CODEL_GET, cfg, cfg->inst);
 }
+
+/* PP GPID grouping related wrappers */
+int dp_gpid_group_create2(int inst, const char *name,
+			 const struct pp_cpu_info *info, u32 num_cpus)
+{
+	struct inst_info *dp_info;
+	struct dp_gpid_group_cfg cfg;
+
+	if (unlikely(!dp_init_ok)) {
+		pr_err("DPM: %s failed: datapath not initialized yet\n",
+		       __func__);
+		return -EINVAL;
+	}
+
+	if (is_invalid_inst(inst))
+		return -EINVAL;
+
+	dp_info = get_dp_prop_info(inst);
+
+	if (!dp_info || !dp_info->dp_qos_platform_set)
+		return -EINVAL;
+
+	cfg.inst = inst;
+	cfg.name = name;
+	cfg.info = info;
+	cfg.num_cpus = num_cpus;
+
+	return dp_info->dp_qos_platform_set(GPID_GROUP_CREATE, &cfg, 0);
+}
+EXPORT_SYMBOL(dp_gpid_group_create2);
+
+int dp_gpid_group_delete2(int inst, u32 id)
+{
+	struct inst_info *dp_info;
+	struct dp_gpid_group_cfg cfg;
+
+	if (unlikely(!dp_init_ok)) {
+		pr_err("DPM: %s failed: datapath not initialized yet\n",
+		       __func__);
+		return -EINVAL;
+	}
+
+	if (is_invalid_inst(inst))
+		return -EINVAL;
+
+	dp_info = get_dp_prop_info(inst);
+
+	if (!dp_info || !dp_info->dp_qos_platform_set)
+		return -EINVAL;
+
+	cfg.inst = inst;
+	cfg.id = id;
+
+	return dp_info->dp_qos_platform_set(GPID_GROUP_DELETE, &cfg, 0);
+}
+EXPORT_SYMBOL(dp_gpid_group_delete2);
+
+int dp_gpid_group_update2(int inst, u32 id, const struct pp_cpu_info *info,
+			 u32 num_cpus)
+{
+	struct inst_info *dp_info;
+	struct dp_gpid_group_cfg cfg;
+
+	if (unlikely(!dp_init_ok)) {
+		pr_err("DPM: %s failed: datapath not initialized yet\n",
+		       __func__);
+		return -EINVAL;
+	}
+
+	if (is_invalid_inst(inst))
+		return -EINVAL;
+
+	dp_info = get_dp_prop_info(inst);
+
+	if (!dp_info || !dp_info->dp_qos_platform_set)
+		return -EINVAL;
+
+	cfg.inst = inst;
+	cfg.id = id;
+	cfg.info = info;
+	cfg.num_cpus = num_cpus;
+
+	return dp_info->dp_qos_platform_set(GPID_GROUP_UPDATE, &cfg, 0);
+}
+EXPORT_SYMBOL(dp_gpid_group_update2);
+
+int dp_gpid_group_add_port2(int inst, u32 id, u16 gpid, u8 prio)
+{
+	struct inst_info *dp_info;
+	struct dp_gpid_group_cfg cfg;
+
+	if (unlikely(!dp_init_ok)) {
+		pr_err("DPM: %s failed: datapath not initialized yet\n",
+		       __func__);
+		return -EINVAL;
+	}
+
+	if (is_invalid_inst(inst))
+		return -EINVAL;
+
+	dp_info = get_dp_prop_info(inst);
+
+	if (!dp_info || !dp_info->dp_qos_platform_set)
+		return -EINVAL;
+
+	cfg.inst = inst;
+	cfg.id = id;
+	cfg.gpid = gpid;
+	cfg.prio = prio;
+
+	return dp_info->dp_qos_platform_set(GPID_GROUP_ADD_PORT, &cfg, 0);
+}
+EXPORT_SYMBOL(dp_gpid_group_add_port2);
+
+int dp_gpid_group_del_port2(int inst, u32 id, u16 gpid)
+{
+	struct inst_info *dp_info;
+	struct dp_gpid_group_cfg cfg;
+
+	if (unlikely(!dp_init_ok)) {
+		pr_err("DPM: %s failed: datapath not initialized yet\n",
+		       __func__);
+		return -EINVAL;
+	}
+
+	if (is_invalid_inst(inst))
+		return -EINVAL;
+
+	dp_info = get_dp_prop_info(inst);
+
+	if (!dp_info || !dp_info->dp_qos_platform_set)
+		return -EINVAL;
+
+	cfg.inst = inst;
+	cfg.id = id;
+	cfg.gpid = gpid;
+
+	return dp_info->dp_qos_platform_set(GPID_GROUP_DEL_PORT, &cfg, 0);
+}
+EXPORT_SYMBOL(dp_gpid_group_del_port2);
+
+int dp_gpid_group_rule_add2(int inst, u32 id, u8 prio,
+			    const struct pp_whitelist_field *fields,
+			    u32 cnt)
+{
+	struct inst_info *dp_info;
+	struct dp_gpid_group_cfg cfg;
+
+	if (unlikely(!dp_init_ok)) {
+		pr_err("DPM: %s failed: datapath not initialized yet\n",
+		       __func__);
+		return -EINVAL;
+	}
+
+	if (is_invalid_inst(inst))
+		return -EINVAL;
+
+	dp_info = get_dp_prop_info(inst);
+
+	if (!dp_info || !dp_info->dp_qos_platform_set)
+		return -EINVAL;
+
+	cfg.inst = inst;
+	cfg.id = id;
+	cfg.prio = prio;
+	cfg.fields = fields;
+	cfg.cnt = cnt;
+
+	return dp_info->dp_qos_platform_set(GPID_GROUP_RULE_ADD, &cfg, 0);
+}
+EXPORT_SYMBOL(dp_gpid_group_rule_add2);
+
+int dp_gpid_group_rule_del2(int inst, u32 id, u8 prio,
+			    const struct pp_whitelist_field *fields,
+			    u32 cnt)
+{
+	struct inst_info *dp_info;
+	struct dp_gpid_group_cfg cfg;
+
+	if (unlikely(!dp_init_ok)) {
+		pr_err("DPM: %s failed: datapath not initialized yet\n",
+		       __func__);
+		return -EINVAL;
+	}
+
+	if (is_invalid_inst(inst))
+		return -EINVAL;
+
+	dp_info = get_dp_prop_info(inst);
+
+	if (!dp_info || !dp_info->dp_qos_platform_set)
+		return -EINVAL;
+
+	cfg.inst = inst;
+	cfg.id = id;
+	cfg.prio = prio;
+	cfg.fields = fields;
+	cfg.cnt = cnt;
+
+	return dp_info->dp_qos_platform_set(GPID_GROUP_RULE_DEL, &cfg, 0);
+}
+EXPORT_SYMBOL(dp_gpid_group_rule_del2);
 
 /* disable optimization in debug mode: pop */
 DP_NO_OPTIMIZE_POP

@@ -172,4 +172,34 @@ int dp_get_netif_stats2(struct net_device *dev, dp_subif_t *subif_id,
 int dp_qos_get_q_global_parms2(int inst, int dp_port, int alloc_flag,
 			       u32 qos_id, struct dp_qos_q_parms *parms);
 
+/* PP GPID group related API's */
+int dp_gpid_group_create2(int inst, const char *name,
+			  const struct pp_cpu_info *info, u32 num_cpus);
+int dp_gpid_group_delete2(int inst, u32 id);
+int dp_gpid_group_update2(int inst, u32 id, const struct pp_cpu_info *info,
+			  u32 num_cpus);
+int dp_gpid_group_add_port2(int inst, u32 id, u16 gpid, u8 prio);
+int dp_gpid_group_del_port2(int inst, u32 id, u16 gpid);
+int dp_gpid_group_rule_add2(int inst, u32 id, u8 prio,
+			    const struct pp_whitelist_field *fields,
+			    u32 cnt);
+int dp_gpid_group_rule_del2(int inst, u32 id, u8 prio,
+			    const struct pp_whitelist_field *fields,
+			    u32 cnt);
+
+/* PP GPID group function pointers */
+extern int (*dp_gpid_group_create_fn)(int inst, const char *name,
+				      const struct pp_cpu_info *info, u32 num_cpus);
+extern int (*dp_gpid_group_delete_fn)(int inst, u32 id);
+extern int (*dp_gpid_group_update_fn)(int inst, u32 id,
+				      const struct pp_cpu_info *info, u32 num_cpus);
+extern int (*dp_gpid_group_add_port_fn)(int inst, u32 id, u16 gpid, u8 prio);
+extern int (*dp_gpid_group_del_port_fn)(int inst, u32 id, u16 gpid);
+extern int (*dp_gpid_group_rule_add_fn)(int inst, u32 id, u8 prio,
+					const struct pp_whitelist_field *fields,
+					u32 cnt);
+extern int (*dp_gpid_group_rule_del_fn)(int inst, u32 id, u8 prio,
+					const struct pp_whitelist_field *fields,
+					u32 cnt);
+
 #endif

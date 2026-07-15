@@ -117,6 +117,13 @@ struct fn_list fn_list[] = {
 	{"dp_get_ts_info", &dp_get_ts_info_fn, &dp_get_ts_info2},
 	{"dp_ndo_do_ioctl", &dp_ndo_do_ioctl_fn, &dp_ndo_do_ioctl2},
 	{"dp_qos_get_q_global_parms", &dp_qos_get_q_global_parms_fn, &dp_qos_get_q_global_parms2},
+	{"dp_gpid_group_create", &dp_gpid_group_create_fn, &dp_gpid_group_create2},
+	{"dp_gpid_group_delete", &dp_gpid_group_delete_fn, &dp_gpid_group_delete2},
+	{"dp_gpid_group_update", &dp_gpid_group_update_fn, &dp_gpid_group_update2},
+	{"dp_gpid_group_add_port", &dp_gpid_group_add_port_fn, &dp_gpid_group_add_port2},
+	{"dp_gpid_group_del_port", &dp_gpid_group_del_port_fn, &dp_gpid_group_del_port2},
+	{"dp_gpid_group_rule_add", &dp_gpid_group_rule_add_fn, &dp_gpid_group_rule_add2},
+	{"dp_gpid_group_rule_del", &dp_gpid_group_rule_del_fn, &dp_gpid_group_rule_del2},
 };
 
 

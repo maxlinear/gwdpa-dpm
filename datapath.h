@@ -578,6 +578,30 @@ enum QOS_FLAG {
 	QOS_BLOCK_FLUSH_QUEUE, /* Block and Flush particular QiD */
 	CODEL_GET,	/* get system level codel configuration */
 	CODEL_SET,	/* set system level codel configuration */
+	GPID_GROUP_CREATE,	/* create a PP GPID group */
+	GPID_GROUP_DELETE,	/* delete a PP GPID group */
+	GPID_GROUP_UPDATE,	/* update a PP GPID group */
+	GPID_GROUP_ADD_PORT,	/* add a port to a PP group */
+	GPID_GROUP_DEL_PORT,	/* delete a port from a PP group */
+	GPID_GROUP_RULE_ADD,	/* add a classification rule to a group */
+	GPID_GROUP_RULE_DEL,	/* delete a classification rule from a group */
+};
+
+/* Forward declarations for PP types */
+struct pp_cpu_info;
+struct pp_gpid_group_match_fld;
+
+/* Structure for passing PP GPID group configuration */
+struct dp_gpid_group_cfg {
+	int inst;			/* Instance ID */
+	const char *name;	/* Group name (for create) */
+	const struct pp_cpu_info *info;	/* CPU info array */
+	u32 num_cpus;		/* Number of CPUs */
+	u32 id;				/* Group ID */
+	u16 gpid;			/* Port GPID */
+	u8 prio;			/* Rule Priority */
+	const struct pp_whitelist_field *fields;	/* Match fields */
+	u32 cnt;			/* Number of match fields */
 };
 
 enum DP_MAP_Q_TYPE {
