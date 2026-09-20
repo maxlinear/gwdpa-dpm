@@ -47,7 +47,7 @@ int get_vlan_via_dev(struct net_device *dev, struct vlan_prop *vlan_prop)
 			return -1;
 		}
 		if (is_vlan_dev(base2)) {
-			pr_err("DPM: Too many VLAN tag, not supoprt\n");
+			pr_err("DPM: Too many VLAN tag, not support\n");
 			return -1;
 		}
 		/*double vlan */

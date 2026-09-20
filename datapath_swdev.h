@@ -30,7 +30,7 @@
 
 /* This flag DP_SWDEV_DUMMY_DEL_IF is used to simulate switchdev call
  * (SWITCHDEV_ATTR_ID_PORT_STP_STATE with dp_swdev_port_attr_set)
- * from dp_deregister_subif or netowrk notifier in case this dev still in
+ * from dp_deregister_subif or network notifier in case this dev still in
  * bridge during de_register
  */
 #define DP_SWDEV_DUMMY_DEL_IF 1

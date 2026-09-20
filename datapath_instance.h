@@ -44,7 +44,7 @@ struct dp_dev_subif {
 
 #define MAX_NDO_PER_OPS  12  /* Maximum number of ndo_xxx to hack per ops */
 struct ndo_offset {
-	bool f_hacked; /* whether nod_xxx hacked or not */
+	bool f_hacked; /* whether ndo_xxx hacked or not */
 	int offset;  /* the ndo_xxx offset in the ops */
 };
 struct dp_dev {
@@ -66,7 +66,7 @@ struct dp_dev {
 	 * ie, call dp_register_subif. For normal device, it should be 1 only.
 	 * But for pmapper, it can be up to 8.
 	 * count will be inc/dec during register_subif/de_register_subif
-	 * for pmapper case, it will call mutliple times.
+	 * for pmapper case, it will call multiple times.
 	 * if count == 0, it means not registered to dpm yet
 	 */
 	u32 count;
@@ -99,7 +99,7 @@ struct dp_dev {
 	struct ndo_offset xfrm_offset[MAX_NDO_PER_OPS];
 	char *xfrm_memo[MAX_NDO_PER_OPS];
 #endif
-	/* below varibles are added since 5.x */
+	/* below variables are added since 5.x */
 
 	/* pointer to bridge device if applicable */
 	struct net_device *br_dev, *last_br_dev; /* no use in new design */
@@ -112,14 +112,14 @@ struct dp_dev {
 	bool f_ops_set;  /* maybe need per ops flag */
 	bool f_stp_disabling;
 	/* points to subif. For pmapper case, it can be up to 8 subifs.
-	 * For the number of entryies, please refer to count value;
-	 * Note: for pmapper device, we cannot support symetric vlan
+	 * For the number of entries, please refer to count value;
+	 * Note: for pmapper device, we cannot support symmetric vlan
 	 */
 	struct list_head subif_list;  /* point to struct dp_dev_subif */
-	bool f_add_dev_wa; /* workaround flag if dpm_reguster_subif is called
+	bool f_add_dev_wa; /* workaround flag if dpm_register_subif is called
 			    * before dpm receive NETDEV_REGISTER event
 			    */
-	bool f_del_dev_wa; /* workaround flag if dpm_de-reguster_subif is called
+	bool f_del_dev_wa; /* workaround flag if dpm_de-register_subif is called
 			    * after dpm receive NETDEV_UNREGISTER event
 			    * Note: later we can remove it since we are using
 			    * ndo_uninit now

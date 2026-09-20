@@ -45,16 +45,16 @@ enum flag {
 
 struct ppv4_queue {
 	int inst;  /* dp instance */
-	u16 qid;  /* -1 means dynammic, otherwise already configured */
+	u16 qid;  /* -1 means dynamic, otherwise already configured */
 	u16 node_id; /*output */
-	u16 sch;  /* -1 means dynammic, otherwise already configured */
+	u16 sch;  /* -1 means dynamic, otherwise already configured */
 	u16 parent; /* -1 means no parent.
-		     * it is used for shared dropping queueu purpose
+		     * it is used for shared dropping queue purpose
 		     */
 };
 
 struct ppv4_scheduler {
-	u16 sch;  /* -1 means dynammic, otherwise already configured */
+	u16 sch;  /* -1 means dynamic, otherwise already configured */
 	u16 parent; /* input */
 	u16 node_id; /* output */
 };
@@ -62,7 +62,7 @@ struct ppv4_scheduler {
 struct ppv4_port {
 	int inst;
 	u16 dp_port;
-	u16 qos_deq_port; /* -1 means dynammic, otherwise already specified.
+	u16 qos_deq_port; /* -1 means dynamic, otherwise already specified.
 			   * Remove in new datapath lib
 			   */
 	u16 cqm_deq_port;  /* rename in new datapath lib */

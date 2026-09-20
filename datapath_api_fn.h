@@ -120,7 +120,7 @@ int dp_ndo_setup_tc2(struct net_device *dev, enum tc_setup_type type,
 /* tc dev capability update */
 int dp_dev_update_tc2(struct net_device *dev);
 
-/* swtichdev callback */
+/* switchdev callback */
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5, 0, 0)
 int dp_bp_ndo_br_setlink2(struct net_device *dev, struct nlmsghdr *nlh,
 			  u16 flags);
